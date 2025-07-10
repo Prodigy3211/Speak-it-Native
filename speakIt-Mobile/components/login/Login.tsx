@@ -6,7 +6,7 @@
 //
 
 //This will be a Login Modal that pops up on the Home Screen when a user wants to comment or create a claim
-
+import { View, Text} from 'react-native';
 
 export default function Login (){
     return (
@@ -23,9 +23,10 @@ export default function Login (){
             <Text>
             Not a Member?
             </Text>
-            <Link>
-            SignUp
-            </Link>
+            <Text>
+                SignUp
+            </Text>
+           
         </View>
             );
 };

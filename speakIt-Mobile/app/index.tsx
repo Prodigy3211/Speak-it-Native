@@ -11,7 +11,12 @@ export default function Index() {
       }}
     >
     <View>
+      <Text>
+        Speak Now Or Forever Hold Your Peace
+      </Text>
     <Image
+    source={require('../assets/images/speak-logo.png')}
+    style={{height:300,width:300}}
           alt="Logo"
           />
         </View>
