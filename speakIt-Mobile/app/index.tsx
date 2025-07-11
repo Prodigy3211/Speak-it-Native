@@ -1,7 +1,13 @@
-import { Text, View, Image } from "react-native";
-import { Link } from "expo-router";
+import { Text, View, Image, Modal, Button, StyleSheet } from "react-native";
+import { useState } from "react";
+import Login from "@/components/login/Login";
 
 export default function Index() {
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  const toggleModal = () => {
+    setIsModalVisible(!isModalVisible);
+  };
   return (
     <View
       style={{
@@ -20,8 +26,12 @@ export default function Index() {
           alt="Logo"
           />
         </View>
-      <Text>Edit app/index.tsx to edit this screen.</Text>
-          <Link href="/Home"> Home </Link>
+          <Button
+          title="Login"
+          onPress={toggleModal}
+          />
+            <Login isModalVisible={isModalVisible} toggleModal={toggleModal} />
+
     </View>
   );
-}
+};
