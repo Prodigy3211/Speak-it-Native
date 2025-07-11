@@ -17,7 +17,6 @@ export default function Home (){
            style={{height:300,width:300}}
            />
            <View>
-            <Login />
            </View>
            </View>
         );
