@@ -80,7 +80,7 @@ export default function CreateClaim() {
                             setCategory('');
                             setRules('');
                             // Navigate to home
-                            router.push('/Home');
+                            router.push('/Speak-It/Home');
                         }
                     }
                 ]

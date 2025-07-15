@@ -38,6 +38,15 @@ export default function Layout(){
                 }}
             />
             <Tabs.Screen
+                name="Categories"
+                options={{
+                    title: 'Categories',
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="grid" size={size} color={color} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
                 name="CreateClaim"
                 options={{
                     title: 'Create',
