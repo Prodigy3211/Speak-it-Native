@@ -1,4 +1,4 @@
-import { Text, View, Image, Modal, Button, StyleSheet } from "react-native";
+import { Text, View, Image, Button} from "react-native";
 import { useState } from "react";
 import Login from "@/components/login/Login";
 

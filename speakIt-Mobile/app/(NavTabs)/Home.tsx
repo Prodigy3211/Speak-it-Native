@@ -5,19 +5,17 @@
 //  Created by Amir Nasser on 7/9/25.
 //
 
-import Login from "@/components/login/Login";
-import {Text, View, Image}  from "react-native";
+import {View, Text}  from "react-native";
+import Trending from "@/components/dashboard/Trending";
 
 export default function Home (){
     
     
     return(
-           <View>
-           <Image source={require('../../assets/images/speak-logo.png')}
-           style={{height:300,width:300}}
-           />
-           <View>
-           </View>
+           <View style={{flex: 1}}>
+            <Text>Welcome to SpeakIt
+            </Text>
+                <Trending />
            </View>
         );
     
