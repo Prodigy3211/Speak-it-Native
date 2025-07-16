@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator} from 'react-native';
 import { supabase } from "@/lib/supabase";
+import { router } from 'expo-router';
 
 interface Claim {
     id: string;
@@ -68,8 +69,18 @@ export default function Trending(){
             setLoading(false);
         }
     };
+
+    const handleClaimPress = (claim: Claim) => {
+        router.push({
+            pathname: '/Speak-It/ClaimDetail' as any,
+            params: { claimId: claim.id }
+        });
+    };
     const renderClaimItem = ({ item }: {item: Claim}) => (
-        <TouchableOpacity style={styles.claimCard}>
+        <TouchableOpacity 
+            style={styles.claimCard}
+            onPress={() => handleClaimPress(item)}
+        >
             <View style={styles.claimHeader}>
                 <Text style={styles.claimTitle} numberOfLines={2}>
                     {item.title || 'Untitled Claim'}

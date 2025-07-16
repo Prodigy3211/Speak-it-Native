@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
+import { CATEGORIES } from '@/lib/constants';
 
 const { width } = Dimensions.get('window');
 
@@ -21,44 +22,32 @@ interface Category {
     description: string;
 }
 
-const categories: Category[] = [
-    {
-        id: '1',
-        name: 'Prove Me Wrong',
-        imageUrl: 'prove-me-wrong.jpg',
-        description: 'Challenge others to prove your claims wrong'
-    },
-    {
-        id: '2',
-        name: 'Relationships',
-        imageUrl: 'relationships.jpg',
-        description: 'Dating, friendships, and human connections'
-    },
-    {
-        id: '3',
-        name: 'War',
-        imageUrl: 'war.jpg',
-        description: 'Military conflicts and geopolitical discussions'
-    },
-    {
-        id: '4',
-        name: 'Politics',
-        imageUrl: 'politics.jpg',
-        description: 'Political discussions and policy debates'
-    },
-    {
-        id: '5',
-        name: 'Philosophy',
-        imageUrl: 'philosophy.jpg',
-        description: 'Deep thinking and philosophical debates'
-    },
-    {
-        id: '6',
-        name: 'Entertainment',
-        imageUrl: 'entertainment.jpg',
-        description: 'Movies, music, TV, and pop culture discussions'
-    }
-];
+const categories: Category[] = CATEGORIES.map((name, index) => {
+    const descriptions = {
+        'Prove Me Wrong': 'Challenge others to prove your claims wrong',
+        'Relationships': 'Dating, friendships, and human connections',
+        'War': 'Military conflicts and geopolitical discussions',
+        'Politics': 'Political discussions and policy debates',
+        'Philosophy': 'Deep thinking and philosophical debates',
+        'Entertainment': 'Movies, music, TV, and pop culture discussions'
+    };
+    
+    const imageUrls = {
+        'Prove Me Wrong': 'prove-me-wrong.jpg',
+        'Relationships': 'relationships.jpg',
+        'War': 'war.jpg',
+        'Politics': 'politics.jpg',
+        'Philosophy': 'philosophy.jpg',
+        'Entertainment': 'entertainment.jpg'
+    };
+    
+    return {
+        id: (index + 1).toString(),
+        name,
+        imageUrl: imageUrls[name as keyof typeof imageUrls],
+        description: descriptions[name as keyof typeof descriptions]
+    };
+});
 
 export default function Categories() {
     const [categoryImages, setCategoryImages] = useState<{ [key: string]: string }>({});
@@ -100,10 +89,9 @@ export default function Categories() {
     };
 
     const handleCategoryPress = (category: Category) => {
-        // Navigate to a filtered view of claims for this category
-        // You can implement this later to show claims filtered by category
+        // Navigate to the category claims view
         router.push({
-            pathname: '/Speak-It/Home',
+            pathname: '/Speak-It/CategoryClaims' as any,
             params: { category: category.name }
         });
     };

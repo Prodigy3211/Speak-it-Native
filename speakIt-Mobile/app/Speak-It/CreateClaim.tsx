@@ -11,15 +11,9 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
+import { CATEGORIES } from '@/lib/constants';
 
-const categories = [
-    'Politics',
-    'Philosophy',
-    'Relationships',
-    'Entertainment',
-    'Prove Me Wrong',
-    'War',
-];
+const categories = CATEGORIES;
 
 export default function CreateClaim() {
     const [title, setTitle] = useState('');
