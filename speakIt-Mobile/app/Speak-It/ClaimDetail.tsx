@@ -12,7 +12,8 @@ import {
     FlatList,
     KeyboardAvoidingView,
     Platform,
-    Modal
+    Modal,
+    Share
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
@@ -1115,7 +1116,30 @@ export default function ClaimDetail() {
                     <Ionicons name="arrow-back" size={24} color="#007AFF" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Claim</Text>
-                <View style={styles.placeholder} />
+                <TouchableOpacity
+                    style={styles.shareButton}
+                    onPress={async () => {
+                        try {
+                            const deepLink = `speakitmobile://claim/${claim.id}`;
+                            const appStoreLink = Platform.OS === 'ios' 
+                                ? 'https://apps.apple.com/app/speakitmobile' // Replace with actual App Store link
+                                : 'https://play.google.com/store/apps/details?id=com.speakitmobile'; // Replace with actual Play Store link
+                            
+                            const shareMessage = `Check out this claim: "${claim.title}"\n\n${claim.claim}\n\n${claim.rules ? `Discussion Rules: ${claim.rules}\n\n` : ''}Open in SpeakIt: ${deepLink}\n\nDon't have the app? Download it here: ${appStoreLink}`;
+                            
+                            await Share.share({
+                                message: shareMessage,
+                                title: claim.title,
+                                url: deepLink, // This will be used on platforms that support URL sharing
+                            });
+                        } catch (error: any) {
+                            console.error('Error sharing claim:', error);
+                            Alert.alert('Error', 'Failed to share claim');
+                        }
+                    }}
+                >
+                    <Ionicons name="share-outline" size={24} color="#007AFF" />
+                </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.content}>
@@ -2013,5 +2037,8 @@ const styles = StyleSheet.create({
     nestedReplyActions: {
         flexDirection: 'row',
         gap: 8,
+    },
+    shareButton: {
+        padding: 8,
     },
 }); 

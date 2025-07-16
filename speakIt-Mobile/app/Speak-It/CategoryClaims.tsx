@@ -6,7 +6,9 @@ import {
     FlatList,
     TouchableOpacity,
     ActivityIndicator,
-    RefreshControl
+    RefreshControl,
+    Share,
+    Platform
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -213,6 +215,25 @@ export default function CategoryClaims() {
         });
     };
 
+    const handleShare = async (claim: Claim) => {
+        try {
+            const deepLink = `speakitmobile://claim/${claim.id}`;
+            const appStoreLink = Platform.OS === 'ios' 
+                ? 'https://apps.apple.com/app/speakitmobile' // Replace with actual App Store link
+                : 'https://play.google.com/store/apps/details?id=com.speakitmobile'; // Replace with actual Play Store link
+            
+            const shareMessage = `Check out this claim: "${claim.title || 'Untitled Claim'}"\n\n${claim.claim}\n\nCategory: ${claim.category}\nby ${claim.op_username || 'Anonymous'}\n\nOpen in SpeakIt: ${deepLink}\n\nDon't have the app? Download it here: ${appStoreLink}`;
+            
+            await Share.share({
+                message: shareMessage,
+                title: claim.title,
+                url: deepLink,
+            });
+        } catch (error: any) {
+            console.error('Error sharing claim:', error);
+        }
+    };
+
     const renderClaimItem = ({ item }: { item: Claim }) => (
         <TouchableOpacity
             style={styles.claimCard}
@@ -222,8 +243,19 @@ export default function CategoryClaims() {
                 <Text style={styles.claimTitle} numberOfLines={2}>
                     {item.title || 'Untitled Claim'}
                 </Text>
-                <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{item.category}</Text>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity
+                        style={styles.shareButton}
+                        onPress={(e) => {
+                            e.stopPropagation(); // Prevent triggering the card press
+                            handleShare(item);
+                        }}
+                    >
+                        <Ionicons name="share-outline" size={16} color="#666" />
+                    </TouchableOpacity>
+                    <View style={styles.categoryBadge}>
+                        <Text style={styles.categoryText}>{item.category}</Text>
+                    </View>
                 </View>
             </View>
 
@@ -450,6 +482,14 @@ const styles = StyleSheet.create({
         color: '#1a1a1a',
         flex: 1,
         marginRight: 8,
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    shareButton: {
+        padding: 8,
     },
     categoryBadge: {
         backgroundColor: '#007AFF',

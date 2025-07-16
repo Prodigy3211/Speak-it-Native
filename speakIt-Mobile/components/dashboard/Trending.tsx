@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import {View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator} from 'react-native';
+import {View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Share, Platform} from 'react-native';
 import { supabase } from "@/lib/supabase";
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Claim {
     id: string;
@@ -189,8 +190,34 @@ export default function Trending(){
                 <Text style={styles.claimTitle} numberOfLines={2}>
                     {item.title || 'Untitled Claim'}
                 </Text>
-                <View style = {styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{item.category || 'General'}</Text>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity
+                        style={styles.shareButton}
+                        onPress={async (e) => {
+                            e.stopPropagation(); // Prevent triggering the card press
+                            try {
+                                const deepLink = `speakitmobile://claim/${item.id}`;
+                                const appStoreLink = Platform.OS === 'ios' 
+                                    ? 'https://apps.apple.com/app/speakitmobile' // Replace with actual App Store link
+                                    : 'https://play.google.com/store/apps/details?id=com.speakitmobile'; // Replace with actual Play Store link
+                                
+                                const shareMessage = `Check out this trending claim: "${item.title}"\n\n${item.claim}\n\nOpen in SpeakIt: ${deepLink}\n\nDon't have the app? Download it here: ${appStoreLink}`;
+                                
+                                await Share.share({
+                                    message: shareMessage,
+                                    title: item.title,
+                                    url: deepLink,
+                                });
+                            } catch (error: any) {
+                                console.error('Error sharing claim:', error);
+                            }
+                        }}
+                    >
+                        <Ionicons name="share-outline" size={16} color="#666" />
+                    </TouchableOpacity>
+                    <View style = {styles.categoryBadge}>
+                        <Text style={styles.categoryText}>{item.category || 'General'}</Text>
+                    </View>
                 </View>
             </View>
 
@@ -392,5 +419,13 @@ const styles = StyleSheet.create({
     },
     againstText: {
         color: '#F44336', // Red for "Against"
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    shareButton: {
+        padding: 8,
     },
 })
