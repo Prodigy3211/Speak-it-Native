@@ -212,7 +212,7 @@ export default function Profile (){
 
             {editingUsername && (
                 <View style={styles.editSection}>
-                    <Text style={styles.editLabel}>New Username:</Text>
+                    <Text style={styles.editLabel}>Make A Name For Yourself:</Text>
                     <Text>This username will appear on your comments and claims.</Text>
                     <TextInput
                         style={styles.usernameInput}

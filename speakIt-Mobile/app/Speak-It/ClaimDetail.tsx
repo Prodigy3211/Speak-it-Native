@@ -541,7 +541,7 @@ export default function ClaimDetail() {
                     user_id: user.id,
                     content: replyText.trim(),
                     parent_comment_id: parentCommentId,
-                    affirmative: true, // Replies inherit the parent's stance
+                    affirmative: isAffirmative, // Use the selected stance
                     up_votes: 0,
                     down_votes: 0
                 })
@@ -763,21 +763,141 @@ export default function ClaimDetail() {
                             )}
                             
                             <View style={styles.replyActions}>
+                                <View style={styles.voteButtons}>
+                                    <TouchableOpacity
+                                        style={styles.voteButton}
+                                        onPress={() => handleVoteComment(reply.id, 'up')}
+                                    >
+                                        <Ionicons name="arrow-up" size={14} color="#666" />
+                                        <Text style={styles.voteText}>{reply.up_votes || 0}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.voteButton}
+                                        onPress={() => handleVoteComment(reply.id, 'down')}
+                                    >
+                                        <Ionicons name="arrow-down" size={14} color="#666" />
+                                        <Text style={styles.voteText}>{reply.down_votes || 0}</Text>
+                                    </TouchableOpacity>
+                                </View>
                                 <TouchableOpacity
-                                    style={styles.voteButton}
-                                    onPress={() => handleVoteComment(reply.id, 'up')}
+                                    style={styles.replyButton}
+                                    onPress={() => setReplyingTo(reply.id)}
                                 >
-                                    <Ionicons name="arrow-up" size={14} color="#666" />
-                                    <Text style={styles.voteText}>{reply.up_votes || 0}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.voteButton}
-                                    onPress={() => handleVoteComment(reply.id, 'down')}
-                                >
-                                    <Ionicons name="arrow-down" size={14} color="#666" />
-                                    <Text style={styles.voteText}>{reply.down_votes || 0}</Text>
+                                    <Text style={styles.replyButtonText}>Reply</Text>
                                 </TouchableOpacity>
                             </View>
+
+                            {/* Reply input for replies */}
+                            {replyingTo === reply.id && (
+                                <View style={styles.replyInput}>
+                                    {/* Affirmative Selection for Replies */}
+                                    <View style={styles.affirmativeContainer}>
+                                        <Text style={styles.affirmativeLabel}>Your stance:</Text>
+                                        <View style={styles.affirmativeButtons}>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.affirmativeButton,
+                                                    isAffirmative === true && styles.affirmativeButtonSelected
+                                                ]}
+                                                onPress={() => setIsAffirmative(true)}
+                                            >
+                                                <Text style={[
+                                                    styles.affirmativeButtonText,
+                                                    isAffirmative === true && styles.affirmativeButtonTextSelected
+                                                ]}>
+                                                    👍 For
+                                                </Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[
+                                                    styles.affirmativeButton,
+                                                    isAffirmative === false && styles.affirmativeButtonSelected
+                                                ]}
+                                                onPress={() => setIsAffirmative(false)}
+                                            >
+                                                <Text style={[
+                                                    styles.affirmativeButtonText,
+                                                    isAffirmative === false && styles.affirmativeButtonTextSelected
+                                                ]}>
+                                                    👎 Against
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.replyInputContainer}>
+                                        <TextInput
+                                            style={styles.replyTextInput}
+                                            value={replyText}
+                                            onChangeText={setReplyText}
+                                            placeholder="Write a reply..."
+                                            placeholderTextColor="#999"
+                                            multiline
+                                            maxLength={500}
+                                            textAlignVertical="top"
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.replyImageButton}
+                                            onPress={async () => {
+                                                const result = await ImagePicker.launchImageLibraryAsync({
+                                                    mediaTypes: ['images'],
+                                                    allowsEditing: true,
+                                                    aspect: [4, 3],
+                                                    quality: 0.8,
+                                                });
+                                                if (!result.canceled) {
+                                                    setReplyImages([...replyImages, result.assets[0].uri]);
+                                                }
+                                            }}
+                                        >
+                                            <Ionicons name="image" size={20} color="#007AFF" />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {replyImages.length > 0 && (
+                                        <View style={styles.replySelectedImages}>
+                                            {replyImages.map((uri, index) => (
+                                                <View key={index} style={styles.replyImagePreview}>
+                                                    <Image source={{ uri }} style={styles.replyPreviewImage} />
+                                                    <TouchableOpacity
+                                                        style={styles.replyRemoveImage}
+                                                        onPress={() => setReplyImages(replyImages.filter((_, i) => i !== index))}
+                                                    >
+                                                        <Ionicons name="close-circle" size={16} color="#dc3545" />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    )}
+
+                                    <View style={styles.replyActions}>
+                                        <TouchableOpacity
+                                            style={styles.cancelButton}
+                                            onPress={() => {
+                                                setReplyingTo(null);
+                                                setReplyText('');
+                                                setReplyImages([]);
+                                            }}
+                                        >
+                                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.submitReplyButton, 
+                                                ((!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting) && styles.disabledButton
+                                            ]}
+                                            onPress={() => submitReply(reply.id)}
+                                            disabled={(!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting}
+                                        >
+                                            {submitting ? (
+                                                <ActivityIndicator color="white" size="small" />
+                                            ) : (
+                                                <Text style={styles.submitReplyButtonText}>Reply</Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            )}
 
                             {/* Render nested replies (replies to replies) */}
                             {reply.replies && reply.replies.length > 0 && (
@@ -819,21 +939,141 @@ export default function ClaimDetail() {
                                             )}
                                             
                                             <View style={styles.nestedReplyActions}>
+                                                <View style={styles.voteButtons}>
+                                                    <TouchableOpacity
+                                                        style={styles.voteButton}
+                                                        onPress={() => handleVoteComment(nestedReply.id, 'up')}
+                                                    >
+                                                        <Ionicons name="arrow-up" size={12} color="#666" />
+                                                        <Text style={styles.voteText}>{nestedReply.up_votes || 0}</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        style={styles.voteButton}
+                                                        onPress={() => handleVoteComment(nestedReply.id, 'down')}
+                                                    >
+                                                        <Ionicons name="arrow-down" size={12} color="#666" />
+                                                        <Text style={styles.voteText}>{nestedReply.down_votes || 0}</Text>
+                                                    </TouchableOpacity>
+                                                </View>
                                                 <TouchableOpacity
-                                                    style={styles.voteButton}
-                                                    onPress={() => handleVoteComment(nestedReply.id, 'up')}
+                                                    style={styles.replyButton}
+                                                    onPress={() => setReplyingTo(nestedReply.id)}
                                                 >
-                                                    <Ionicons name="arrow-up" size={12} color="#666" />
-                                                    <Text style={styles.voteText}>{nestedReply.up_votes || 0}</Text>
-                                                </TouchableOpacity>
-                                                <TouchableOpacity
-                                                    style={styles.voteButton}
-                                                    onPress={() => handleVoteComment(nestedReply.id, 'down')}
-                                                >
-                                                    <Ionicons name="arrow-down" size={12} color="#666" />
-                                                    <Text style={styles.voteText}>{nestedReply.down_votes || 0}</Text>
+                                                    <Text style={styles.replyButtonText}>Reply</Text>
                                                 </TouchableOpacity>
                                             </View>
+
+                                            {/* Reply input for nested replies */}
+                                            {replyingTo === nestedReply.id && (
+                                                <View style={styles.replyInput}>
+                                                    {/* Affirmative Selection for Nested Replies */}
+                                                    <View style={styles.affirmativeContainer}>
+                                                        <Text style={styles.affirmativeLabel}>Your stance:</Text>
+                                                        <View style={styles.affirmativeButtons}>
+                                                            <TouchableOpacity
+                                                                style={[
+                                                                    styles.affirmativeButton,
+                                                                    isAffirmative === true && styles.affirmativeButtonSelected
+                                                                ]}
+                                                                onPress={() => setIsAffirmative(true)}
+                                                            >
+                                                                <Text style={[
+                                                                    styles.affirmativeButtonText,
+                                                                    isAffirmative === true && styles.affirmativeButtonTextSelected
+                                                                ]}>
+                                                                    👍 For
+                                                                </Text>
+                                                            </TouchableOpacity>
+                                                            <TouchableOpacity
+                                                                style={[
+                                                                    styles.affirmativeButton,
+                                                                    isAffirmative === false && styles.affirmativeButtonSelected
+                                                                ]}
+                                                                onPress={() => setIsAffirmative(false)}
+                                                            >
+                                                                <Text style={[
+                                                                    styles.affirmativeButtonText,
+                                                                    isAffirmative === false && styles.affirmativeButtonTextSelected
+                                                                ]}>
+                                                                    👎 Against
+                                                                </Text>
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                    </View>
+
+                                                    <View style={styles.replyInputContainer}>
+                                                        <TextInput
+                                                            style={styles.replyTextInput}
+                                                            value={replyText}
+                                                            onChangeText={setReplyText}
+                                                            placeholder="Write a reply..."
+                                                            placeholderTextColor="#999"
+                                                            multiline
+                                                            maxLength={500}
+                                                            textAlignVertical="top"
+                                                        />
+                                                        <TouchableOpacity
+                                                            style={styles.replyImageButton}
+                                                            onPress={async () => {
+                                                                const result = await ImagePicker.launchImageLibraryAsync({
+                                                                    mediaTypes: ['images'],
+                                                                    allowsEditing: true,
+                                                                    aspect: [4, 3],
+                                                                    quality: 0.8,
+                                                                });
+                                                                if (!result.canceled) {
+                                                                    setReplyImages([...replyImages, result.assets[0].uri]);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Ionicons name="image" size={20} color="#007AFF" />
+                                                        </TouchableOpacity>
+                                                    </View>
+
+                                                    {replyImages.length > 0 && (
+                                                        <View style={styles.replySelectedImages}>
+                                                            {replyImages.map((uri, index) => (
+                                                                <View key={index} style={styles.replyImagePreview}>
+                                                                    <Image source={{ uri }} style={styles.replyPreviewImage} />
+                                                                    <TouchableOpacity
+                                                                        style={styles.replyRemoveImage}
+                                                                        onPress={() => setReplyImages(replyImages.filter((_, i) => i !== index))}
+                                                                    >
+                                                                        <Ionicons name="close-circle" size={16} color="#dc3545" />
+                                                                    </TouchableOpacity>
+                                                                </View>
+                                                            ))}
+                                                        </View>
+                                                    )}
+
+                                                    <View style={styles.replyActions}>
+                                                        <TouchableOpacity
+                                                            style={styles.cancelButton}
+                                                            onPress={() => {
+                                                                setReplyingTo(null);
+                                                                setReplyText('');
+                                                                setReplyImages([]);
+                                                            }}
+                                                        >
+                                                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity
+                                                            style={[
+                                                                styles.submitReplyButton, 
+                                                                ((!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting) && styles.disabledButton
+                                                            ]}
+                                                            onPress={() => submitReply(nestedReply.id)}
+                                                            disabled={(!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting}
+                                                        >
+                                                            {submitting ? (
+                                                                <ActivityIndicator color="white" size="small" />
+                                                            ) : (
+                                                                <Text style={styles.submitReplyButtonText}>Reply</Text>
+                                                            )}
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                </View>
+                                            )}
                                         </View>
                                     ))}
                                 </View>
