@@ -6,7 +6,9 @@ import {
     FlatList,
     TouchableOpacity,
     ActivityIndicator,
-    RefreshControl
+    RefreshControl,
+    Share,
+    Platform
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -22,6 +24,17 @@ interface Claim {
     down_votes: number;
     comment_count: number;
     op_username?: string;
+    forComments: number;
+    againstComments: number;
+    forPercentage: number;
+    againstPercentage: number;
+}
+
+interface Comment {
+    id: string;
+    parent_comment_id: string | null;
+    affirmative: boolean;
+    replies: Comment[];
 }
 
 export default function CategoryClaims() {
@@ -36,6 +49,98 @@ export default function CategoryClaims() {
             fetchCategoryClaims();
         }
     }, [category]);
+
+    // Recursive function to count all comments including nested replies with stance
+    const countCommentsRecursively = (commentList: Comment[]): { total: number; forCount: number; againstCount: number } => {
+        let totalCount = 0;
+        let forCount = 0;
+        let againstCount = 0;
+        
+        commentList.forEach(comment => {
+            totalCount++; // Count this comment
+            if (comment.affirmative) {
+                forCount++;
+            } else {
+                againstCount++;
+            }
+            
+            // Recursively count nested replies
+            if (comment.replies && comment.replies.length > 0) {
+                const nestedCounts = countCommentsRecursively(comment.replies);
+                totalCount += nestedCounts.total;
+                forCount += nestedCounts.forCount;
+                againstCount += nestedCounts.againstCount;
+            }
+        });
+        
+        return { total: totalCount, forCount, againstCount };
+    };
+
+    // Function to get all comments for a claim with nested replies
+    const getCommentsWithReplies = async (claimId: string): Promise<Comment[]> => {
+        try {
+            // Get all comments for this claim
+            const { data: allComments, error: allCommentsError } = await supabase
+                .from('comments')
+                .select('*')
+                .eq('claim_id', claimId)
+                .order('created_at', { ascending: true });
+
+            if (allCommentsError) {
+                console.error('Error fetching comments for claim', claimId, ':', allCommentsError);
+                return [];
+            }
+
+            // Check for orphaned comments (comments with parent_comment_id that don't exist)
+            const validParentIds = new Set(allComments?.map(c => c.id) || []);
+            const orphanedComments = allComments?.filter(comment => 
+                comment.parent_comment_id && !validParentIds.has(comment.parent_comment_id)
+            ) || [];
+            
+            let commentsData = allComments;
+            
+            if (orphanedComments.length > 0) {
+                // Convert orphaned comments to top-level comments for display
+                const fixedOrphanedComments = orphanedComments.map(comment => ({
+                    ...comment,
+                    parent_comment_id: null
+                }));
+                
+                // Add orphaned comments to the comments list
+                commentsData = [...(commentsData || []), ...fixedOrphanedComments];
+            }
+
+            // Get top-level comments (parent_comment_id is null)
+            const topLevelComments = commentsData?.filter(comment => 
+                comment.parent_comment_id === null
+            ) || [];
+
+            // If we have comments but no top-level comments, there might be a schema issue
+            if (commentsData && commentsData.length > 0 && topLevelComments.length === 0) {
+                // TEMPORARY FALLBACK: Show all comments as top-level if schema is broken
+                return commentsData.map(comment => ({
+                    ...comment,
+                    parent_comment_id: null,
+                    replies: []
+                }));
+            }
+
+            // Build the nested structure
+            const buildNestedComments = (parentId: string | null): Comment[] => {
+                return commentsData
+                    ?.filter(comment => comment.parent_comment_id === parentId)
+                    .map(comment => ({
+                        ...comment,
+                        replies: buildNestedComments(comment.id)
+                    })) || [];
+            };
+
+            return buildNestedComments(null);
+        } catch (error) {
+            console.error('Error in getCommentsWithReplies:', error);
+            return [];
+        }
+    };
 
     const fetchCategoryClaims = async () => {
         try {
@@ -52,21 +157,6 @@ export default function CategoryClaims() {
             if (claimsError) {
                 throw claimsError;
             }
-
-            // Get comment counts for these claims
-            const { data: comments, error: commentsError } = await supabase
-                .from('comments')
-                .select('claim_id');
-
-            if (commentsError) {
-                throw commentsError;
-            }
-
-            // Count comments per claim
-            const commentCounts = comments?.reduce((acc: any, comment: any) => {
-                acc[comment.claim_id] = (acc[comment.claim_id] || 0) + 1;
-                return acc;
-            }, {}) || {};
 
             // Get usernames for claim creators
             const claimCreatorIds = categoryClaims?.map(claim => claim.op_id).filter(Boolean) || [];
@@ -85,14 +175,25 @@ export default function CategoryClaims() {
                 return acc;
             }, {}) || {};
 
-            // Combine the data
-            const claimsWithCounts = categoryClaims?.map(claim => ({
-                ...claim,
-                comment_count: commentCounts[claim.id] || 0,
-                op_username: usernameMap[claim.op_id] || 'Anonymous'
-            })) || [];
+            // Get comment counts and stance statistics for each claim
+            const claimsWithStats = await Promise.all(
+                categoryClaims?.map(async (claim) => {
+                    const commentsWithReplies = await getCommentsWithReplies(claim.id);
+                    const commentStats = countCommentsRecursively(commentsWithReplies);
+                    
+                    return {
+                        ...claim,
+                        comment_count: commentStats.total,
+                        forComments: commentStats.forCount,
+                        againstComments: commentStats.againstCount,
+                        forPercentage: commentStats.total > 0 ? Math.round((commentStats.forCount / commentStats.total) * 100) : 0,
+                        againstPercentage: commentStats.total > 0 ? Math.round((commentStats.againstCount / commentStats.total) * 100) : 0,
+                        op_username: usernameMap[claim.op_id] || 'Anonymous'
+                    };
+                }) || []
+            );
 
-            setClaims(claimsWithCounts);
+            setClaims(claimsWithStats);
         } catch (err: any) {
             console.error('Error fetching category claims:', err);
             setError(err.message);
@@ -114,6 +215,25 @@ export default function CategoryClaims() {
         });
     };
 
+    const handleShare = async (claim: Claim) => {
+        try {
+            const deepLink = `speakitmobile://claim/${claim.id}`;
+            const appStoreLink = Platform.OS === 'ios' 
+                ? 'https://apps.apple.com/app/speakitmobile' // Replace with actual App Store link
+                : 'https://play.google.com/store/apps/details?id=com.speakitmobile'; // Replace with actual Play Store link
+            
+            const shareMessage = `Check out this claim: "${claim.title || 'Untitled Claim'}"\n\n${claim.claim}\n\nCategory: ${claim.category}\nby ${claim.op_username || 'Anonymous'}\n\nOpen in SpeakIt: ${deepLink}\n\nDon't have the app? Download it here: ${appStoreLink}`;
+            
+            await Share.share({
+                message: shareMessage,
+                title: claim.title,
+                url: deepLink,
+            });
+        } catch (error: any) {
+            console.error('Error sharing claim:', error);
+        }
+    };
+
     const renderClaimItem = ({ item }: { item: Claim }) => (
         <TouchableOpacity
             style={styles.claimCard}
@@ -123,8 +243,19 @@ export default function CategoryClaims() {
                 <Text style={styles.claimTitle} numberOfLines={2}>
                     {item.title || 'Untitled Claim'}
                 </Text>
-                <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{item.category}</Text>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity
+                        style={styles.shareButton}
+                        onPress={(e) => {
+                            e.stopPropagation(); // Prevent triggering the card press
+                            handleShare(item);
+                        }}
+                    >
+                        <Ionicons name="share-outline" size={16} color="#666" />
+                    </TouchableOpacity>
+                    <View style={styles.categoryBadge}>
+                        <Text style={styles.categoryText}>{item.category}</Text>
+                    </View>
                 </View>
             </View>
 
@@ -138,14 +269,16 @@ export default function CategoryClaims() {
                         <Ionicons name="chatbubble-outline" size={16} color="#666" />
                         <Text style={styles.statText}>{item.comment_count}</Text>
                     </View>
-                    <View style={styles.statItem}>
-                        <Ionicons name="arrow-up" size={16} color="#28a745" />
-                        <Text style={[styles.statText, styles.upvoteText]}>{item.up_votes || 0}</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Ionicons name="arrow-down" size={16} color="#dc3545" />
-                        <Text style={[styles.statText, styles.downvoteText]}>{item.down_votes || 0}</Text>
-                    </View>
+                    {item.comment_count > 0 && (
+                        <View style={styles.stanceStats}>
+                            <Text style={[styles.stanceText, styles.forText]}>
+                                👍 {item.forPercentage}%
+                            </Text>
+                            <Text style={[styles.stanceText, styles.againstText]}>
+                                👎 {item.againstPercentage}%
+                            </Text>
+                        </View>
+                    )}
                 </View>
                 <View style={styles.metaInfo}>
                     <Text style={styles.authorText}>by {item.op_username}</Text>
@@ -241,7 +374,7 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         backgroundColor: 'white',
         borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
+        borderBottomColor: '#e0e0e0 ',
     },
     backButton: {
         padding: 8,
@@ -350,6 +483,14 @@ const styles = StyleSheet.create({
         flex: 1,
         marginRight: 8,
     },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    shareButton: {
+        padding: 8,
+    },
     categoryBadge: {
         backgroundColor: '#007AFF',
         paddingHorizontal: 8,
@@ -386,12 +527,6 @@ const styles = StyleSheet.create({
         color: '#666',
         fontWeight: '500',
     },
-    upvoteText: {
-        color: '#28a745',
-    },
-    downvoteText: {
-        color: '#dc3545',
-    },
     metaInfo: {
         alignItems: 'flex-end',
     },
@@ -403,5 +538,20 @@ const styles = StyleSheet.create({
     dateText: {
         fontSize: 12,
         color: '#999',
+    },
+    stanceStats: {
+        flexDirection: 'row',
+        gap: 8,
+        marginLeft: 16,
+    },
+    stanceText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    forText: {
+        color: '#28a745',
+    },
+    againstText: {
+        color: '#dc3545',
     },
 }); 
