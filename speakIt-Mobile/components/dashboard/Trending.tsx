@@ -133,7 +133,7 @@ return(
 <View style={styles.container}>
     <Text style={styles.sectionTitle}> 🔥The Hottest Takes</Text>
     <Text style={styles.sectionSubtitle}>
-        Click a claim below to join the discussion!
+        Click a Hot Take below, see all categories or create your own thread to join the discussion!
     </Text>
     <FlatList
     data={trendingClaims}

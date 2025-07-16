@@ -253,20 +253,20 @@ const styles = StyleSheet.create({
         backgroundColor: '#f8f9fa',
     },
     headerSection: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         marginBottom: 20,
+        alignItems: 'center',
     },
     welcomeText: {
         fontSize: 24,
         fontWeight: 'bold',
         color: '#1a1a1a',
-        flex: 1,
+        marginBottom: 12,
+        textAlign: 'center',
     },
     headerButtons: {
         flexDirection: 'row',
         gap: 8,
+        justifyContent: 'center',
     },
     editButton: {
         backgroundColor: '#007AFF',

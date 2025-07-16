@@ -25,6 +25,7 @@ export default function Layout(){
                 headerTintColor: 'white',
                 headerTitleStyle: {
                     fontWeight: 'bold',
+                    fontSize: 32,
                 },
             }}
         >
@@ -32,6 +33,7 @@ export default function Layout(){
                 name="Home"
                 options={{
                     title: 'Home',
+                    headerShown: false,
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="home" size={size} color={color} />
                     ),
@@ -41,6 +43,7 @@ export default function Layout(){
                 name="Categories"
                 options={{
                     title: 'Categories',
+                    headerShown: false,
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="grid" size={size} color={color} />
                     ),
@@ -50,6 +53,7 @@ export default function Layout(){
                 name="CreateClaim"
                 options={{
                     title: 'Create',
+                    headerShown: false,
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="add-circle" size={size} color={color} />
                     ),
@@ -59,6 +63,7 @@ export default function Layout(){
                 name="Profile"
                 options={{
                     title: 'Profile',
+                    headerShown: false,
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="person" size={size} color={color} />
                     ),
@@ -68,12 +73,14 @@ export default function Layout(){
                 name="ClaimDetail"
                 options={{
                     href: null, // This hides it from the tab bar
+                    headerShown: false,
                 }}
             />
             <Tabs.Screen
                 name="CategoryClaims"
                 options={{
                     href: null, // This hides it from the tab bar
+                    headerShown: false,
                 }}
             />
         </Tabs>

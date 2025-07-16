@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
     View, 
     Text, 
@@ -7,7 +7,11 @@ import {
     TouchableOpacity, 
     ScrollView, 
     Alert,
-    ActivityIndicator 
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+    TouchableWithoutFeedback,
+    Keyboard
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
@@ -21,6 +25,10 @@ export default function CreateClaim() {
     const [category, setCategory] = useState('');
     const [rules, setRules] = useState('');
     const [loading, setLoading] = useState(false);
+    
+    const titleInputRef = useRef<TextInput>(null);
+    const claimInputRef = useRef<TextInput>(null);
+    const rulesInputRef = useRef<TextInput>(null);
 
     const handleSubmit = async () => {
         // Validation
@@ -88,36 +96,50 @@ export default function CreateClaim() {
     };
 
     return (
-        <ScrollView style={styles.container}>
-            <Text style={styles.title}>Create a New Claim</Text>
-            <Text style={styles.subtitle}>
-                Share your perspective and start a meaningful discussion
-            </Text>
+        <KeyboardAvoidingView 
+            style={styles.container} 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <ScrollView style={styles.scrollContainer}>
+                    <Text style={styles.title}>Create a New Claim</Text>
+                    <Text style={styles.subtitle}>
+                        Share your perspective and start a meaningful discussion
+                    </Text>
 
             {/* Title Input */}
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>Title *</Text>
+                <Text style={styles.label}>What is your claim? *</Text>
                 <TextInput
+                    ref={titleInputRef}
                     style={styles.input}
                     value={title}
                     onChangeText={setTitle}
-                    placeholder="Enter a compelling title for your claim"
+                    placeholder="I think that..."
                     maxLength={100}
+                    returnKeyType="next"
+                    onSubmitEditing={() => claimInputRef.current?.focus()}
+                    blurOnSubmit={false}
                 />
                 <Text style={styles.characterCount}>{title.length}/100</Text>
             </View>
 
             {/* Claim Input */}
             <View style={styles.inputGroup}>
-                <Text style={styles.label}>Your Claim *</Text>
+                <Text style={styles.label}>Support your claim with all your soul *</Text>
                 <TextInput
+                    ref={claimInputRef}
                     style={[styles.input, styles.textArea]}
                     value={claim}
                     onChangeText={setClaim}
-                    placeholder="State your claim clearly and concisely..."
+                    placeholder="Tell us why you think this way..."
+                    placeholderTextColor="#999"
                     multiline
                     numberOfLines={6}
                     maxLength={500}
+                    returnKeyType="next"
+                    onSubmitEditing={() => rulesInputRef.current?.focus()}
+                    blurOnSubmit={false}
                 />
                 <Text style={styles.characterCount}>{claim.length}/500</Text>
             </View>
@@ -150,13 +172,17 @@ export default function CreateClaim() {
             <View style={styles.inputGroup}>
                 <Text style={styles.label}>Discussion Rules (Optional)</Text>
                 <TextInput
+                    ref={rulesInputRef}
                     style={[styles.input, styles.textArea]}
                     value={rules}
                     onChangeText={setRules}
                     placeholder="Set guidelines for the discussion (e.g., 'Be respectful', 'Provide evidence')"
+                    placeholderTextColor="#999"
                     multiline
                     numberOfLines={4}
                     maxLength={200}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
                 />
                 <Text style={styles.characterCount}>{rules.length}/200</Text>
             </View>
@@ -179,7 +205,9 @@ export default function CreateClaim() {
                     * Required fields
                 </Text>
             </View>
-        </ScrollView>
+                </ScrollView>
+            </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -187,6 +215,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f8f9fa',
+    },
+    scrollContainer: {
+        flex: 1,
         padding: 16,
     },
     title: {
