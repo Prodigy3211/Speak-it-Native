@@ -64,6 +64,18 @@ export default function Layout(){
                     ),
                 }}
             />
+            <Tabs.Screen
+                name="ClaimDetail"
+                options={{
+                    href: null, // This hides it from the tab bar
+                }}
+            />
+            <Tabs.Screen
+                name="CategoryClaims"
+                options={{
+                    href: null, // This hides it from the tab bar
+                }}
+            />
         </Tabs>
     );
 }
