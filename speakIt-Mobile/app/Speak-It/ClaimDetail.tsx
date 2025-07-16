@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -14,6 +14,7 @@ import {
     Platform,
     Modal
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -73,6 +74,15 @@ export default function ClaimDetail() {
         }
     }, [claimId]);
 
+    // Refresh data when screen comes into focus
+    useFocusEffect(
+        useCallback(() => {
+            if (claimId) {
+                fetchComments();
+            }
+        }, [claimId])
+    );
+
     const fetchClaimAndComments = async () => {
         try {
             setLoading(true);
@@ -112,16 +122,98 @@ export default function ClaimDetail() {
         }
     };
 
+    const fetchRepliesRecursively = async (parentId: string, voteCounts: any, user: any): Promise<Comment[]> => {
+        try {
+            // Get direct replies to this comment
+            const { data: replies, error: repliesError } = await supabase
+                .from('comments')
+                .select('*')
+                .eq('parent_comment_id', parentId)
+                .order('created_at', { ascending: true });
+
+            if (repliesError) {
+                console.error('Error fetching replies for comment', parentId, ':', repliesError);
+                return [];
+            }
+
+            console.log(`Found ${replies?.length || 0} replies for comment ${parentId}`);
+
+            // Process each reply and get its nested replies
+            const repliesWithDetails = await Promise.all(
+                (replies || []).map(async (reply) => {
+                    const { data: replyProfile } = await supabase
+                        .from('profiles')
+                        .select('username')
+                        .eq('user_id', reply.user_id)
+                        .single();
+
+                    const { data: replyImages } = await supabase
+                        .from('images')
+                        .select('*')
+                        .eq('comment_id', reply.id);
+
+                    // Get user's vote on this reply
+                    let replyUserVote = null;
+                    if (user) {
+                        const { data: replyVoteData } = await supabase
+                            .from('votes')
+                            .select('vote_type')
+                            .eq('comment_id', reply.id)
+                            .eq('user_id', user.id)
+                            .single();
+                        replyUserVote = replyVoteData?.vote_type || null;
+                    }
+
+                    // Recursively get nested replies
+                    const nestedReplies = await fetchRepliesRecursively(reply.id, voteCounts, user);
+
+                    return {
+                        ...reply,
+                        username: replyProfile?.username || 'Anonymous',
+                        images: replyImages || [],
+                        user_vote: replyUserVote,
+                        up_votes: voteCounts[reply.id]?.up_votes || 0,
+                        down_votes: voteCounts[reply.id]?.down_votes || 0,
+                        replies: nestedReplies
+                    };
+                })
+            );
+
+            return repliesWithDetails;
+        } catch (error) {
+            console.error('Error in fetchRepliesRecursively:', error);
+            return [];
+        }
+    };
+
     const fetchComments = async () => {
         try {
+            console.log('Fetching comments for claim:', claimId);
+            
+            // First, let's get ALL comments for this claim to see the total count
+            const { data: allComments, error: allCommentsError } = await supabase
+                .from('comments')
+                .select('*')
+                .eq('claim_id', claimId)
+                .order('created_at', { ascending: false });
+
+            if (allCommentsError) throw allCommentsError;
+            
+            console.log('Total comments in database for this claim:', allComments?.length || 0);
+            console.log('All comments data:', allComments);
+            
+            // Get top-level comments (parent_comment_id is null)
             const { data: commentsData, error: commentsError } = await supabase
                 .from('comments')
                 .select('*')
                 .eq('claim_id', claimId)
-                .is('parent_comment_id', null) // Only top-level comments
+                .is('parent_comment_id', null)
                 .order('created_at', { ascending: false });
 
             if (commentsError) throw commentsError;
+            
+            console.log('Found top-level comments:', commentsData?.length || 0);
+            console.log('Top-level comments data:', commentsData);
 
             // Get all votes for comments
             const { data: votes, error: votesError } = await supabase
@@ -175,49 +267,8 @@ export default function ClaimDetail() {
                         userVote = voteData?.vote_type || null;
                     }
 
-                    // Get replies
-                    const { data: replies } = await supabase
-                        .from('comments')
-                        .select('*')
-                        .eq('parent_comment_id', comment.id)
-                        .order('created_at', { ascending: true });
-
-                    const repliesWithDetails = await Promise.all(
-                        (replies || []).map(async (reply) => {
-                            const { data: replyProfile } = await supabase
-                                .from('profiles')
-                                .select('username')
-                                .eq('user_id', reply.user_id)
-                                .single();
-
-                            const { data: replyImages } = await supabase
-                                .from('images')
-                                .select('*')
-                                .eq('comment_id', reply.id);
-
-                            // Get user's vote on this reply
-                            let replyUserVote = null;
-                            if (user) {
-                                const { data: replyVoteData } = await supabase
-                                    .from('votes')
-                                    .select('vote_type')
-                                    .eq('comment_id', reply.id)
-                                    .eq('user_id', user.id)
-                                    .single();
-                                replyUserVote = replyVoteData?.vote_type || null;
-                            }
-
-                            return {
-                                ...reply,
-                                username: replyProfile?.username || 'Anonymous',
-                                images: replyImages || [],
-                                user_vote: replyUserVote,
-                                up_votes: voteCounts[reply.id]?.up_votes || 0,
-                                down_votes: voteCounts[reply.id]?.down_votes || 0,
-                                replies: []
-                            };
-                        })
-                    );
+                    // Get replies for this comment (including nested replies)
+                    const repliesWithDetails = await fetchRepliesRecursively(comment.id, voteCounts, user);
 
                     return {
                         ...comment,
@@ -238,9 +289,29 @@ export default function ClaimDetail() {
     };
 
     const calculateCommentStats = () => {
-        const forComments = comments.filter(comment => comment.affirmative).length;
-        const againstComments = comments.filter(comment => !comment.affirmative).length;
-        const totalComments = comments.length;
+        // Count all comments including nested replies recursively
+        let totalComments = 0;
+        let forComments = 0;
+        let againstComments = 0;
+
+        const countCommentsRecursively = (commentList: Comment[]) => {
+            commentList.forEach(comment => {
+                totalComments++;
+                if (comment.affirmative) {
+                    forComments++;
+                } else {
+                    againstComments++;
+                }
+
+                // Recursively count nested replies
+                if (comment.replies && comment.replies.length > 0) {
+                    countCommentsRecursively(comment.replies);
+                }
+            });
+        };
+
+        // Start counting from top-level comments
+        countCommentsRecursively(comments);
         
         return {
             forComments,
@@ -309,7 +380,7 @@ export default function ClaimDetail() {
 
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [4, 3],
             quality: 0.8,
@@ -326,13 +397,16 @@ export default function ClaimDetail() {
         for (const imageUri of selectedImages) {
             try {
                 const fileName = `comment-${commentId}-${Date.now()}.jpg`;
+                
+                // Create a proper file object for upload
+                const response = await fetch(imageUri);
+                const blob = await response.blob();
+                
                 const { data, error } = await supabase.storage
                     .from('comment-images')
-                    .upload(fileName, {
-                        uri: imageUri,
-                        type: 'image/jpeg',
-                        name: fileName,
-                    } as any);
+                    .upload(fileName, blob, {
+                        contentType: 'image/jpeg'
+                    });
 
                 if (error) throw error;
 
@@ -404,7 +478,12 @@ export default function ClaimDetail() {
             setSelectedImages([]);
             setIsAffirmative(null);
             setCommentModalVisible(false);
+            
+            // Refresh comments immediately
             await fetchComments();
+            
+            // Show success message
+            Alert.alert('Success', 'Comment posted successfully!');
 
         } catch (error: any) {
             console.error('Error submitting comment:', error);
@@ -452,7 +531,12 @@ export default function ClaimDetail() {
             setReplyText('');
             setReplyImages([]);
             setReplyingTo(null);
+            
+            // Refresh comments immediately
             await fetchComments();
+            
+            // Show success message
+            Alert.alert('Success', 'Reply posted successfully!');
 
         } catch (error: any) {
             console.error('Error submitting reply:', error);
@@ -544,14 +628,16 @@ export default function ClaimDetail() {
                             value={replyText}
                             onChangeText={setReplyText}
                             placeholder="Write a reply..."
+                            placeholderTextColor="#999"
                             multiline
                             maxLength={500}
+                            textAlignVertical="top"
                         />
                         <TouchableOpacity
                             style={styles.replyImageButton}
                             onPress={async () => {
                                 const result = await ImagePicker.launchImageLibraryAsync({
-                                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                    mediaTypes: ['images'],
                                     allowsEditing: true,
                                     aspect: [4, 3],
                                     quality: 0.8,
@@ -593,11 +679,18 @@ export default function ClaimDetail() {
                             <Text style={styles.cancelButtonText}>Cancel</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={[styles.submitReplyButton, (!replyText.trim() && replyImages.length === 0) && styles.disabledButton]}
+                            style={[
+                                styles.submitReplyButton, 
+                                ((!replyText.trim() && replyImages.length === 0) || submitting) && styles.disabledButton
+                            ]}
                             onPress={() => submitReply(item.id)}
                             disabled={(!replyText.trim() && replyImages.length === 0) || submitting}
                         >
-                            <Text style={styles.submitReplyButtonText}>Reply</Text>
+                            {submitting ? (
+                                <ActivityIndicator color="white" size="small" />
+                            ) : (
+                                <Text style={styles.submitReplyButtonText}>Reply</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -607,58 +700,118 @@ export default function ClaimDetail() {
             {item.replies.length > 0 && (
                 <View style={styles.repliesContainer}>
                     {item.replies.map((reply) => (
-                                                    <View key={reply.id} style={[
-                                styles.replyCard,
-                                { backgroundColor: reply.affirmative ? '#e8f4fd' : '#fff8e1' }
-                            ]}>
-                                <View style={styles.replyHeader}>
-                                    <View style={styles.replyHeaderLeft}>
-                                        <Text style={styles.replyAuthor}>{reply.username}</Text>
-                                        <View style={[
-                                            styles.stanceBadge,
-                                            { backgroundColor: reply.affirmative ? '#28a745' : '#dc3545' }
-                                        ]}>
-                                            <Text style={styles.stanceText}>
-                                                {reply.affirmative ? '👍 For' : '👎 Against'}
-                                            </Text>
-                                        </View>
+                        <View key={reply.id} style={[
+                            styles.replyCard,
+                            { backgroundColor: reply.affirmative ? '#e8f4fd' : '#fff8e1' }
+                        ]}>
+                            <View style={styles.replyHeader}>
+                                <View style={styles.replyHeaderLeft}>
+                                    <Text style={styles.replyAuthor}>{reply.username}</Text>
+                                    <View style={[
+                                        styles.stanceBadge,
+                                        { backgroundColor: reply.affirmative ? '#28a745' : '#dc3545' }
+                                    ]}>
+                                        <Text style={styles.stanceText}>
+                                            {reply.affirmative ? '👍 For' : '👎 Against'}
+                                        </Text>
                                     </View>
-                                    <Text style={styles.replyDate}>
-                                        {new Date(reply.created_at).toLocaleDateString()}
-                                    </Text>
                                 </View>
-                                <Text style={styles.replyContent}>{reply.content}</Text>
-                                
-                                {reply.images && reply.images.length > 0 && (
-                                    <View style={styles.replyImageContainer}>
-                                        {reply.images.map((image) => (
-                                            <Image
-                                                key={image.id}
-                                                source={{ uri: image.image_url }}
-                                                style={styles.replyImage}
-                                                resizeMode="cover"
-                                            />
-                                        ))}
-                                    </View>
-                                )}
-                                
-                                <View style={styles.replyActions}>
-                                    <TouchableOpacity
-                                        style={styles.voteButton}
-                                        onPress={() => handleVoteComment(reply.id, 'up')}
-                                    >
-                                        <Ionicons name="arrow-up" size={14} color="#666" />
-                                        <Text style={styles.voteText}>{reply.up_votes || 0}</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.voteButton}
-                                        onPress={() => handleVoteComment(reply.id, 'down')}
-                                    >
-                                        <Ionicons name="arrow-down" size={14} color="#666" />
-                                        <Text style={styles.voteText}>{reply.down_votes || 0}</Text>
-                                    </TouchableOpacity>
-                                </View>
+                                <Text style={styles.replyDate}>
+                                    {new Date(reply.created_at).toLocaleDateString()}
+                                </Text>
                             </View>
+                            <Text style={styles.replyContent}>{reply.content}</Text>
+                            
+                            {reply.images && reply.images.length > 0 && (
+                                <View style={styles.replyImageContainer}>
+                                    {reply.images.map((image) => (
+                                        <Image
+                                            key={image.id}
+                                            source={{ uri: image.image_url }}
+                                            style={styles.replyImage}
+                                            resizeMode="cover"
+                                        />
+                                    ))}
+                                </View>
+                            )}
+                            
+                            <View style={styles.replyActions}>
+                                <TouchableOpacity
+                                    style={styles.voteButton}
+                                    onPress={() => handleVoteComment(reply.id, 'up')}
+                                >
+                                    <Ionicons name="arrow-up" size={14} color="#666" />
+                                    <Text style={styles.voteText}>{reply.up_votes || 0}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.voteButton}
+                                    onPress={() => handleVoteComment(reply.id, 'down')}
+                                >
+                                    <Ionicons name="arrow-down" size={14} color="#666" />
+                                    <Text style={styles.voteText}>{reply.down_votes || 0}</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Render nested replies (replies to replies) */}
+                            {reply.replies && reply.replies.length > 0 && (
+                                <View style={styles.nestedRepliesContainer}>
+                                    {reply.replies.map((nestedReply) => (
+                                        <View key={nestedReply.id} style={[
+                                            styles.nestedReplyCard,
+                                            { backgroundColor: nestedReply.affirmative ? '#f0f8ff' : '#fffaf0' }
+                                        ]}>
+                                            <View style={styles.nestedReplyHeader}>
+                                                <View style={styles.nestedReplyHeaderLeft}>
+                                                    <Text style={styles.nestedReplyAuthor}>{nestedReply.username}</Text>
+                                                    <View style={[
+                                                        styles.stanceBadge,
+                                                        { backgroundColor: nestedReply.affirmative ? '#28a745' : '#dc3545' }
+                                                    ]}>
+                                                        <Text style={styles.stanceText}>
+                                                            {nestedReply.affirmative ? '👍 For' : '👎 Against'}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={styles.nestedReplyDate}>
+                                                    {new Date(nestedReply.created_at).toLocaleDateString()}
+                                                </Text>
+                                            </View>
+                                            <Text style={styles.nestedReplyContent}>{nestedReply.content}</Text>
+                                            
+                                            {nestedReply.images && nestedReply.images.length > 0 && (
+                                                <View style={styles.nestedReplyImageContainer}>
+                                                    {nestedReply.images.map((image) => (
+                                                        <Image
+                                                            key={image.id}
+                                                            source={{ uri: image.image_url }}
+                                                            style={styles.nestedReplyImage}
+                                                            resizeMode="cover"
+                                                        />
+                                                    ))}
+                                                </View>
+                                            )}
+                                            
+                                            <View style={styles.nestedReplyActions}>
+                                                <TouchableOpacity
+                                                    style={styles.voteButton}
+                                                    onPress={() => handleVoteComment(nestedReply.id, 'up')}
+                                                >
+                                                    <Ionicons name="arrow-up" size={12} color="#666" />
+                                                    <Text style={styles.voteText}>{nestedReply.up_votes || 0}</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    style={styles.voteButton}
+                                                    onPress={() => handleVoteComment(nestedReply.id, 'down')}
+                                                >
+                                                    <Ionicons name="arrow-down" size={12} color="#666" />
+                                                    <Text style={styles.voteText}>{nestedReply.down_votes || 0}</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
                     ))}
                 </View>
             )}
@@ -756,17 +909,26 @@ export default function ClaimDetail() {
                 </View>
 
                 {/* Add Comment Button */}
-                <TouchableOpacity
-                    style={styles.addCommentButton}
-                    onPress={() => setCommentModalVisible(true)}
-                >
-                    <Ionicons name="chatbubble-outline" size={20} color="white" />
-                    <Text style={styles.addCommentButtonText}>Add Comment</Text>
-                </TouchableOpacity>
+                <View style={styles.commentButtonsContainer}>
+                    <TouchableOpacity
+                        style={styles.addCommentButton}
+                        onPress={() => setCommentModalVisible(true)}
+                    >
+                        <Ionicons name="chatbubble-outline" size={20} color="white" />
+                        <Text style={styles.addCommentButtonText}>Add Comment</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                        style={styles.refreshButton}
+                        onPress={fetchComments}
+                    >
+                        <Ionicons name="refresh" size={20} color="#007AFF" />
+                    </TouchableOpacity>
+                </View>
 
                 {/* Comments Section */}
                 <View style={styles.commentsSection}>
-                    <Text style={styles.commentsTitle}>Comments ({comments.length})</Text>
+                    <Text style={styles.commentsTitle}>Comments ({calculateCommentStats().totalComments})</Text>
                     
                     <FlatList
                         data={comments}
@@ -781,115 +943,115 @@ export default function ClaimDetail() {
             {/* Comment Modal */}
             <Modal
                 visible={commentModalVisible}
-                animationType="slide"
-                presentationStyle="pageSheet"
+                animationType="fade"
+                transparent={true}
                 onRequestClose={() => setCommentModalVisible(false)}
             >
-                <KeyboardAvoidingView 
-                    style={styles.modalContainer} 
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                >
-                    <View style={styles.modalHeader}>
-                        <TouchableOpacity
-                            style={styles.closeButton}
-                            onPress={() => {
-                                setCommentModalVisible(false);
-                                setNewComment('');
-                                setSelectedImages([]);
-                                setIsAffirmative(null);
-                            }}
-                        >
-                            <Ionicons name="close" size={24} color="#007AFF" />
-                        </TouchableOpacity>
-                        <Text style={styles.modalTitle}>Add Comment</Text>
-                        <View style={styles.placeholder} />
-                    </View>
-
-                    <ScrollView style={styles.modalContent}>
-                        {/* Affirmative Selection */}
-                        <View style={styles.affirmativeContainer}>
-                            <Text style={styles.affirmativeLabel}>Your stance:</Text>
-                            <View style={styles.affirmativeButtons}>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.affirmativeButton,
-                                        isAffirmative === true && styles.affirmativeButtonSelected
-                                    ]}
-                                    onPress={() => setIsAffirmative(true)}
-                                >
-                                    <Text style={[
-                                        styles.affirmativeButtonText,
-                                        isAffirmative === true && styles.affirmativeButtonTextSelected
-                                    ]}>
-                                        👍 For
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.affirmativeButton,
-                                        isAffirmative === false && styles.affirmativeButtonSelected
-                                    ]}
-                                    onPress={() => setIsAffirmative(false)}
-                                >
-                                    <Text style={[
-                                        styles.affirmativeButtonText,
-                                        isAffirmative === false && styles.affirmativeButtonTextSelected
-                                    ]}>
-                                        👎 Against
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={styles.textInput}
-                                value={newComment}
-                                onChangeText={setNewComment}
-                                placeholder="Add a comment..."
-                                multiline
-                                maxLength={500}
-                            />
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Add Comment</Text>
                             <TouchableOpacity
-                                style={styles.imageButton}
-                                onPress={pickImage}
+                                style={styles.closeButton}
+                                onPress={() => {
+                                    setCommentModalVisible(false);
+                                    setNewComment('');
+                                    setSelectedImages([]);
+                                    setIsAffirmative(null);
+                                }}
                             >
-                                <Ionicons name="image" size={24} color="#007AFF" />
+                                <Ionicons name="close" size={24} color="#666" />
                             </TouchableOpacity>
                         </View>
 
-                        {selectedImages.length > 0 && (
-                            <View style={styles.selectedImages}>
-                                {selectedImages.map((uri, index) => (
-                                    <View key={index} style={styles.imagePreview}>
-                                        <Image source={{ uri }} style={styles.previewImage} />
-                                        <TouchableOpacity
-                                            style={styles.removeImage}
-                                            onPress={() => setSelectedImages(selectedImages.filter((_, i) => i !== index))}
-                                        >
-                                            <Ionicons name="close-circle" size={20} color="#dc3545" />
-                                        </TouchableOpacity>
-                                    </View>
-                                ))}
+                        <ScrollView style={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
+                            {/* Affirmative Selection */}
+                            <View style={styles.affirmativeContainer}>
+                                <Text style={styles.affirmativeLabel}>Your stance:</Text>
+                                <View style={styles.affirmativeButtons}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.affirmativeButton,
+                                            isAffirmative === true && styles.affirmativeButtonSelected
+                                        ]}
+                                        onPress={() => setIsAffirmative(true)}
+                                    >
+                                        <Text style={[
+                                            styles.affirmativeButtonText,
+                                            isAffirmative === true && styles.affirmativeButtonTextSelected
+                                        ]}>
+                                            👍 For
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.affirmativeButton,
+                                            isAffirmative === false && styles.affirmativeButtonSelected
+                                        ]}
+                                        onPress={() => setIsAffirmative(false)}
+                                    >
+                                        <Text style={[
+                                            styles.affirmativeButtonText,
+                                            isAffirmative === false && styles.affirmativeButtonTextSelected
+                                        ]}>
+                                            👎 Against
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        )}
 
-                        <TouchableOpacity
-                            style={[
-                                styles.submitButton, 
-                                ((!newComment.trim() && selectedImages.length === 0) || isAffirmative === null) && styles.disabledButton
-                            ]}
-                            onPress={submitComment}
-                            disabled={(!newComment.trim() && selectedImages.length === 0) || isAffirmative === null || submitting}
-                        >
-                            {submitting ? (
-                                <ActivityIndicator color="white" />
-                            ) : (
-                                <Text style={styles.submitButtonText}>Post Comment</Text>
+                            <View style={styles.modalInputContainer}>
+                                <TextInput
+                                    style={styles.modalTextInput}
+                                    value={newComment}
+                                    onChangeText={setNewComment}
+                                    placeholder="Add a comment..."
+                                    placeholderTextColor="#999"
+                                    multiline
+                                    maxLength={500}
+                                    textAlignVertical="top"
+                                />
+                                <TouchableOpacity
+                                    style={styles.modalImageButton}
+                                    onPress={pickImage}
+                                >
+                                    <Ionicons name="image" size={24} color="#007AFF" />
+                                </TouchableOpacity>
+                            </View>
+
+                            {selectedImages.length > 0 && (
+                                <View style={styles.selectedImages}>
+                                    {selectedImages.map((uri, index) => (
+                                        <View key={index} style={styles.imagePreview}>
+                                            <Image source={{ uri }} style={styles.previewImage} />
+                                            <TouchableOpacity
+                                                style={styles.removeImage}
+                                                onPress={() => setSelectedImages(selectedImages.filter((_, i) => i !== index))}
+                                            >
+                                                <Ionicons name="close-circle" size={20} color="#dc3545" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
                             )}
-                        </TouchableOpacity>
-                    </ScrollView>
-                </KeyboardAvoidingView>
+
+                            <TouchableOpacity
+                                style={[
+                                    styles.modalSubmitButton, 
+                                    ((!newComment.trim() && selectedImages.length === 0) || isAffirmative === null || submitting) && styles.disabledButton
+                                ]}
+                                onPress={submitComment}
+                                disabled={(!newComment.trim() && selectedImages.length === 0) || isAffirmative === null || submitting}
+                            >
+                                {submitting ? (
+                                    <ActivityIndicator color="white" />
+                                ) : (
+                                    <Text style={styles.modalSubmitButtonText}>Post Comment</Text>
+                                )}
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                </View>
             </Modal>
         </KeyboardAvoidingView>
     );
@@ -1107,18 +1269,35 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     replyInput: {
-        marginTop: 8,
-        padding: 8,
+        marginTop: 12,
+        padding: 12,
         backgroundColor: '#f8f9fa',
-        borderRadius: 8,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    replyInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        gap: 8,
+        marginBottom: 8,
     },
     replyTextInput: {
+        flex: 1,
         backgroundColor: 'white',
         borderRadius: 8,
-        padding: 8,
+        padding: 12,
         fontSize: 14,
-        minHeight: 40,
-        marginBottom: 8,
+        minHeight: 60,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    replyImageButton: {
+        padding: 8,
+        backgroundColor: 'white',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
     },
     replyActions: {
         flexDirection: 'row',
@@ -1339,6 +1518,14 @@ const styles = StyleSheet.create({
         color: '#999',
         marginTop: 2,
     },
+    commentButtonsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginHorizontal: 16,
+        marginBottom: 16,
+        gap: 12,
+    },
     addCommentButton: {
         backgroundColor: '#007AFF',
         flexDirection: 'row',
@@ -1347,31 +1534,56 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         paddingHorizontal: 20,
         borderRadius: 8,
-        marginHorizontal: 16,
-        marginBottom: 16,
+        flex: 1,
         gap: 8,
+    },
+    refreshButton: {
+        backgroundColor: 'white',
+        borderWidth: 1,
+        borderColor: '#007AFF',
+        padding: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     addCommentButtonText: {
         color: 'white',
         fontSize: 16,
         fontWeight: '600',
     },
-    modalContainer: {
+    modalOverlay: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        width: '100%',
+        maxWidth: 400,
+        maxHeight: '80%',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 10,
     },
     modalHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: 'white',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#e0e0e0',
     },
     closeButton: {
-        padding: 8,
+        padding: 4,
     },
     modalTitle: {
         fontSize: 18,
@@ -1380,19 +1592,47 @@ const styles = StyleSheet.create({
         flex: 1,
         textAlign: 'center',
     },
-    modalContent: {
-        flex: 1,
-        padding: 16,
+    modalScrollContent: {
+        padding: 20,
     },
-    replyInputContainer: {
+    modalInputContainer: {
         flexDirection: 'row',
         alignItems: 'flex-end',
-        gap: 8,
-        marginBottom: 8,
+        gap: 12,
+        marginBottom: 16,
     },
-    replyImageButton: {
-        padding: 6,
+    modalTextInput: {
+        flex: 1,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 16,
+        minHeight: 100,
+        textAlignVertical: 'top',
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
     },
+    modalImageButton: {
+        padding: 8,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    modalSubmitButton: {
+        backgroundColor: '#007AFF',
+        borderRadius: 12,
+        padding: 16,
+        alignItems: 'center',
+        marginTop: 16,
+    },
+    modalSubmitButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+
     replySelectedImages: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -1422,5 +1662,58 @@ const styles = StyleSheet.create({
         width: 60,
         height: 60,
         borderRadius: 6,
+    },
+    nestedRepliesContainer: {
+        marginTop: 8,
+        marginLeft: 16,
+    },
+    nestedReplyCard: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 6,
+        padding: 8,
+        marginBottom: 6,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    nestedReplyHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    nestedReplyHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    nestedReplyAuthor: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#1a1a1a',
+    },
+    nestedReplyDate: {
+        fontSize: 9,
+        color: '#999',
+    },
+    nestedReplyContent: {
+        fontSize: 11,
+        color: '#333',
+        lineHeight: 14,
+        marginBottom: 4,
+    },
+    nestedReplyImageContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 4,
+        marginBottom: 4,
+    },
+    nestedReplyImage: {
+        width: 40,
+        height: 40,
+        borderRadius: 4,
+    },
+    nestedReplyActions: {
+        flexDirection: 'row',
+        gap: 8,
     },
 }); 
