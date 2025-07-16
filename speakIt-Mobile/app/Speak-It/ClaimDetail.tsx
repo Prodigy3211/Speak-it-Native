@@ -136,8 +136,6 @@ export default function ClaimDetail() {
                 return [];
             }
 
-            console.log(`Found ${replies?.length || 0} replies for comment ${parentId}`);
-
             // Process each reply and get its nested replies
             const repliesWithDetails = await Promise.all(
                 (replies || []).map(async (reply) => {
@@ -188,8 +186,6 @@ export default function ClaimDetail() {
 
     const fetchComments = async () => {
         try {
-            console.log('Fetching comments for claim:', claimId);
-            
             // First, let's get ALL comments for this claim to see the total count
             const { data: allComments, error: allCommentsError } = await supabase
                 .from('comments')
@@ -199,11 +195,8 @@ export default function ClaimDetail() {
 
             if (allCommentsError) throw allCommentsError;
             
-            console.log('Total comments in database for this claim:', allComments?.length || 0);
-            console.log('All comments data:', allComments);
-            
             // Get top-level comments (parent_comment_id is null)
-            const { data: commentsData, error: commentsError } = await supabase
+            const { data: initialCommentsData, error: commentsError } = await supabase
                 .from('comments')
                 .select('*')
                 .eq('claim_id', claimId)
@@ -212,8 +205,42 @@ export default function ClaimDetail() {
 
             if (commentsError) throw commentsError;
             
-            console.log('Found top-level comments:', commentsData?.length || 0);
-            console.log('Top-level comments data:', commentsData);
+            // Check for orphaned comments (comments with parent_comment_id that don't exist)
+            const validParentIds = new Set(allComments?.map(c => c.id) || []);
+            const orphanedComments = allComments?.filter(comment => 
+                comment.parent_comment_id && !validParentIds.has(comment.parent_comment_id)
+            ) || [];
+            
+            let commentsData = initialCommentsData;
+            
+            if (orphanedComments.length > 0) {
+                // Convert orphaned comments to top-level comments for display
+                const fixedOrphanedComments = orphanedComments.map(comment => ({
+                    ...comment,
+                    parent_comment_id: null
+                }));
+                
+                // Add orphaned comments to the top-level comments list
+                const allTopLevelComments = [...(commentsData || []), ...fixedOrphanedComments];
+                commentsData = allTopLevelComments.sort((a, b) => 
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                );
+            }
+            
+            // If we have comments but no top-level comments, there might be a schema issue
+            if (allComments && allComments.length > 0 && (!commentsData || commentsData.length === 0)) {
+                console.warn('WARNING: Found comments but no top-level comments. This might indicate a schema issue.');
+                console.log('All comments parent_comment_id values:', allComments.map(c => ({ id: c.id, parent_id: c.parent_comment_id })));
+                
+                // TEMPORARY FALLBACK: Show all comments as top-level if schema is broken
+                console.log('Using fallback: showing all comments as top-level');
+                const fallbackComments = allComments.map(comment => ({
+                    ...comment,
+                    parent_comment_id: null // Force all to be top-level
+                }));
+                setComments(fallbackComments);
+                return;
+            }
 
             // Get all votes for comments
             const { data: votes, error: votesError } = await supabase
@@ -924,6 +951,28 @@ export default function ClaimDetail() {
                     >
                         <Ionicons name="refresh" size={20} color="#007AFF" />
                     </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                        style={styles.debugButton}
+                        onPress={async () => {
+                            console.log('=== DEBUG INFO ===');
+                            console.log('Claim ID:', claimId);
+                            console.log('Current comments state:', comments);
+                            console.log('Comments length:', comments.length);
+                            
+                            // Check database directly
+                            const { data: allComments, error } = await supabase
+                                .from('comments')
+                                .select('*')
+                                .eq('claim_id', claimId);
+                            
+                            console.log('Direct DB query result:', allComments);
+                            console.log('Direct DB query error:', error);
+                            console.log('=== END DEBUG ===');
+                        }}
+                    >
+                        <Ionicons name="bug" size={20} color="#FF6B35" />
+                    </TouchableOpacity>
                 </View>
 
                 {/* Comments Section */}
@@ -1541,6 +1590,15 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderWidth: 1,
         borderColor: '#007AFF',
+        padding: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    debugButton: {
+        backgroundColor: 'white',
+        borderWidth: 1,
+        borderColor: '#FF6B35',
         padding: 12,
         borderRadius: 8,
         alignItems: 'center',
