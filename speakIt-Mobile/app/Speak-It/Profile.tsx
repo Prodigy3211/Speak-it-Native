@@ -8,6 +8,7 @@
 import {Text, View, StyleSheet, TouchableOpacity, Alert, TextInput}  from "react-native";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { router } from "expo-router";
 import Statistics from "@/components/profile/Statistics";
 
 interface UserStats {
@@ -149,6 +150,33 @@ export default function Profile (){
         }
     };
 
+    const handleLogout = async () => {
+        Alert.alert(
+            'Logout',
+            'Are you sure you want to logout?',
+            [
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                },
+                {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const { error } = await supabase.auth.signOut();
+                            if (error) throw error;
+                            router.replace('/');
+                        } catch (error) {
+                            console.error('Error logging out:', error);
+                            Alert.alert('Error', 'Failed to logout');
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
     if (loading) {
         return (
             <View style={styles.container}>
@@ -163,15 +191,23 @@ export default function Profile (){
                 <Text style={styles.welcomeText}>
                     Welcome {userStats.username}!
                 </Text>
-                <TouchableOpacity 
-                    style={styles.editButton}
-                    onPress={() => {
-                        setNewUsername(userStats.username || '');
-                        setEditingUsername(true);
-                    }}
-                >
-                    <Text style={styles.editButtonText}>Edit Profile</Text>
-                </TouchableOpacity>
+                <View style={styles.headerButtons}>
+                    <TouchableOpacity 
+                        style={styles.editButton}
+                        onPress={() => {
+                            setNewUsername(userStats.username || '');
+                            setEditingUsername(true);
+                        }}
+                    >
+                        <Text style={styles.editButtonText}>Edit Profile</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={styles.logoutButton}
+                        onPress={handleLogout}
+                    >
+                        <Text style={styles.logoutButtonText}>Logout</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {editingUsername && (
@@ -228,11 +264,26 @@ const styles = StyleSheet.create({
         color: '#1a1a1a',
         flex: 1,
     },
+    headerButtons: {
+        flexDirection: 'row',
+        gap: 8,
+    },
     editButton: {
         backgroundColor: '#007AFF',
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 8,
+    },
+    logoutButton: {
+        backgroundColor: '#dc3545',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    logoutButtonText: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: '600',
     },
     editButtonText: {
         color: 'white',

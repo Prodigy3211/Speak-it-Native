@@ -131,7 +131,10 @@ if (error) {
 
 return(
 <View style={styles.container}>
-    <Text style={styles.sectionTitle}> 🔥Trending Claims</Text>
+    <Text style={styles.sectionTitle}> 🔥The Hottest Takes</Text>
+    <Text style={styles.sectionSubtitle}>
+        Click a claim below to join the discussion!
+    </Text>
     <FlatList
     data={trendingClaims}
     renderItem={renderClaimItem}
@@ -155,6 +158,14 @@ const styles = StyleSheet.create({
         marginHorizontal: 16,
         marginVertical: 12,
         color: '#1a1a1a',
+    },
+    sectionSubtitle: {
+        fontSize: 16,
+        color: '#666',
+        marginHorizontal: 16,
+        marginBottom: 16,
+        textAlign: 'center',
+        fontStyle: 'italic',
     },
     listContainer: {
         paddingHorizontal:16,
