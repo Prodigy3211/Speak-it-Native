@@ -11,7 +11,8 @@ import {
     Image,
     FlatList,
     KeyboardAvoidingView,
-    Platform
+    Platform,
+    Modal
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -62,7 +63,9 @@ export default function ClaimDetail() {
     const [selectedImages, setSelectedImages] = useState<string[]>([]);
     const [replyingTo, setReplyingTo] = useState<string | null>(null);
     const [replyText, setReplyText] = useState('');
+    const [replyImages, setReplyImages] = useState<string[]>([]);
     const [isAffirmative, setIsAffirmative] = useState<boolean | null>(null);
+    const [commentModalVisible, setCommentModalVisible] = useState(false);
 
     useEffect(() => {
         if (claimId) {
@@ -400,6 +403,7 @@ export default function ClaimDetail() {
             setNewComment('');
             setSelectedImages([]);
             setIsAffirmative(null);
+            setCommentModalVisible(false);
             await fetchComments();
 
         } catch (error: any) {
@@ -411,8 +415,8 @@ export default function ClaimDetail() {
     };
 
     const submitReply = async (parentCommentId: string) => {
-        if (!replyText.trim()) {
-            Alert.alert('Error', 'Please enter a reply');
+        if (!replyText.trim() && replyImages.length === 0) {
+            Alert.alert('Error', 'Please enter a reply or add an image');
             return;
         }
 
@@ -424,7 +428,7 @@ export default function ClaimDetail() {
                 return;
             }
 
-            const { error } = await supabase
+            const { data: reply, error } = await supabase
                 .from('comments')
                 .insert({
                     claim_id: claimId,
@@ -434,11 +438,19 @@ export default function ClaimDetail() {
                     affirmative: true, // Replies inherit the parent's stance
                     up_votes: 0,
                     down_votes: 0
-                });
+                })
+                .select()
+                .single();
 
             if (error) throw error;
 
+            // Upload images if any
+            if (replyImages.length > 0) {
+                await uploadImages(reply.id);
+            }
+
             setReplyText('');
+            setReplyImages([]);
             setReplyingTo(null);
             await fetchComments();
 
@@ -526,27 +538,64 @@ export default function ClaimDetail() {
 
             {replyingTo === item.id && (
                 <View style={styles.replyInput}>
-                    <TextInput
-                        style={styles.replyTextInput}
-                        value={replyText}
-                        onChangeText={setReplyText}
-                        placeholder="Write a reply..."
-                        multiline
-                    />
+                    <View style={styles.replyInputContainer}>
+                        <TextInput
+                            style={styles.replyTextInput}
+                            value={replyText}
+                            onChangeText={setReplyText}
+                            placeholder="Write a reply..."
+                            multiline
+                            maxLength={500}
+                        />
+                        <TouchableOpacity
+                            style={styles.replyImageButton}
+                            onPress={async () => {
+                                const result = await ImagePicker.launchImageLibraryAsync({
+                                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                    allowsEditing: true,
+                                    aspect: [4, 3],
+                                    quality: 0.8,
+                                });
+                                if (!result.canceled) {
+                                    setReplyImages([...replyImages, result.assets[0].uri]);
+                                }
+                            }}
+                        >
+                            <Ionicons name="image" size={20} color="#007AFF" />
+                        </TouchableOpacity>
+                    </View>
+
+                    {replyImages.length > 0 && (
+                        <View style={styles.replySelectedImages}>
+                            {replyImages.map((uri, index) => (
+                                <View key={index} style={styles.replyImagePreview}>
+                                    <Image source={{ uri }} style={styles.replyPreviewImage} />
+                                    <TouchableOpacity
+                                        style={styles.replyRemoveImage}
+                                        onPress={() => setReplyImages(replyImages.filter((_, i) => i !== index))}
+                                    >
+                                        <Ionicons name="close-circle" size={16} color="#dc3545" />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
                     <View style={styles.replyActions}>
                         <TouchableOpacity
                             style={styles.cancelButton}
                             onPress={() => {
                                 setReplyingTo(null);
                                 setReplyText('');
+                                setReplyImages([]);
                             }}
                         >
                             <Text style={styles.cancelButtonText}>Cancel</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={[styles.submitReplyButton, !replyText.trim() && styles.disabledButton]}
+                            style={[styles.submitReplyButton, (!replyText.trim() && replyImages.length === 0) && styles.disabledButton]}
                             onPress={() => submitReply(item.id)}
-                            disabled={!replyText.trim() || submitting}
+                            disabled={(!replyText.trim() && replyImages.length === 0) || submitting}
                         >
                             <Text style={styles.submitReplyButtonText}>Reply</Text>
                         </TouchableOpacity>
@@ -558,44 +607,58 @@ export default function ClaimDetail() {
             {item.replies.length > 0 && (
                 <View style={styles.repliesContainer}>
                     {item.replies.map((reply) => (
-                        <View key={reply.id} style={[
-                            styles.replyCard,
-                            { backgroundColor: reply.affirmative ? '#e8f4fd' : '#fff8e1' }
-                        ]}>
-                            <View style={styles.replyHeader}>
-                                <View style={styles.replyHeaderLeft}>
-                                    <Text style={styles.replyAuthor}>{reply.username}</Text>
-                                    <View style={[
-                                        styles.stanceBadge,
-                                        { backgroundColor: reply.affirmative ? '#28a745' : '#dc3545' }
-                                    ]}>
-                                        <Text style={styles.stanceText}>
-                                            {reply.affirmative ? '👍 For' : '👎 Against'}
-                                        </Text>
+                                                    <View key={reply.id} style={[
+                                styles.replyCard,
+                                { backgroundColor: reply.affirmative ? '#e8f4fd' : '#fff8e1' }
+                            ]}>
+                                <View style={styles.replyHeader}>
+                                    <View style={styles.replyHeaderLeft}>
+                                        <Text style={styles.replyAuthor}>{reply.username}</Text>
+                                        <View style={[
+                                            styles.stanceBadge,
+                                            { backgroundColor: reply.affirmative ? '#28a745' : '#dc3545' }
+                                        ]}>
+                                            <Text style={styles.stanceText}>
+                                                {reply.affirmative ? '👍 For' : '👎 Against'}
+                                            </Text>
+                                        </View>
                                     </View>
+                                    <Text style={styles.replyDate}>
+                                        {new Date(reply.created_at).toLocaleDateString()}
+                                    </Text>
                                 </View>
-                                <Text style={styles.replyDate}>
-                                    {new Date(reply.created_at).toLocaleDateString()}
-                                </Text>
+                                <Text style={styles.replyContent}>{reply.content}</Text>
+                                
+                                {reply.images && reply.images.length > 0 && (
+                                    <View style={styles.replyImageContainer}>
+                                        {reply.images.map((image) => (
+                                            <Image
+                                                key={image.id}
+                                                source={{ uri: image.image_url }}
+                                                style={styles.replyImage}
+                                                resizeMode="cover"
+                                            />
+                                        ))}
+                                    </View>
+                                )}
+                                
+                                <View style={styles.replyActions}>
+                                    <TouchableOpacity
+                                        style={styles.voteButton}
+                                        onPress={() => handleVoteComment(reply.id, 'up')}
+                                    >
+                                        <Ionicons name="arrow-up" size={14} color="#666" />
+                                        <Text style={styles.voteText}>{reply.up_votes || 0}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.voteButton}
+                                        onPress={() => handleVoteComment(reply.id, 'down')}
+                                    >
+                                        <Ionicons name="arrow-down" size={14} color="#666" />
+                                        <Text style={styles.voteText}>{reply.down_votes || 0}</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                            <Text style={styles.replyContent}>{reply.content}</Text>
-                            <View style={styles.replyActions}>
-                                <TouchableOpacity
-                                    style={styles.voteButton}
-                                    onPress={() => handleVoteComment(reply.id, 'up')}
-                                >
-                                    <Ionicons name="arrow-up" size={14} color="#666" />
-                                    <Text style={styles.voteText}>{reply.up_votes || 0}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.voteButton}
-                                    onPress={() => handleVoteComment(reply.id, 'down')}
-                                >
-                                    <Ionicons name="arrow-down" size={14} color="#666" />
-                                    <Text style={styles.voteText}>{reply.down_votes || 0}</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
                     ))}
                 </View>
             )}
@@ -692,6 +755,15 @@ export default function ClaimDetail() {
                     })()}
                 </View>
 
+                {/* Add Comment Button */}
+                <TouchableOpacity
+                    style={styles.addCommentButton}
+                    onPress={() => setCommentModalVisible(true)}
+                >
+                    <Ionicons name="chatbubble-outline" size={20} color="white" />
+                    <Text style={styles.addCommentButtonText}>Add Comment</Text>
+                </TouchableOpacity>
+
                 {/* Comments Section */}
                 <View style={styles.commentsSection}>
                     <Text style={styles.commentsTitle}>Comments ({comments.length})</Text>
@@ -706,91 +778,119 @@ export default function ClaimDetail() {
                 </View>
             </ScrollView>
 
-            {/* Comment Input */}
-            <View style={styles.commentInput}>
-                {/* Affirmative Selection */}
-                <View style={styles.affirmativeContainer}>
-                    <Text style={styles.affirmativeLabel}>Your stance:</Text>
-                    <View style={styles.affirmativeButtons}>
+            {/* Comment Modal */}
+            <Modal
+                visible={commentModalVisible}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setCommentModalVisible(false)}
+            >
+                <KeyboardAvoidingView 
+                    style={styles.modalContainer} 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    <View style={styles.modalHeader}>
                         <TouchableOpacity
-                            style={[
-                                styles.affirmativeButton,
-                                isAffirmative === true && styles.affirmativeButtonSelected
-                            ]}
-                            onPress={() => setIsAffirmative(true)}
+                            style={styles.closeButton}
+                            onPress={() => {
+                                setCommentModalVisible(false);
+                                setNewComment('');
+                                setSelectedImages([]);
+                                setIsAffirmative(null);
+                            }}
                         >
-                            <Text style={[
-                                styles.affirmativeButtonText,
-                                isAffirmative === true && styles.affirmativeButtonTextSelected
-                            ]}>
-                                👍 For
-                            </Text>
+                            <Ionicons name="close" size={24} color="#007AFF" />
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[
-                                styles.affirmativeButton,
-                                isAffirmative === false && styles.affirmativeButtonSelected
-                            ]}
-                            onPress={() => setIsAffirmative(false)}
-                        >
-                            <Text style={[
-                                styles.affirmativeButtonText,
-                                isAffirmative === false && styles.affirmativeButtonTextSelected
-                            ]}>
-                                👎 Against
-                            </Text>
-                        </TouchableOpacity>
+                        <Text style={styles.modalTitle}>Add Comment</Text>
+                        <View style={styles.placeholder} />
                     </View>
-                </View>
 
-                <View style={styles.inputContainer}>
-                    <TextInput
-                        style={styles.textInput}
-                        value={newComment}
-                        onChangeText={setNewComment}
-                        placeholder="Add a comment..."
-                        multiline
-                        maxLength={500}
-                    />
-                    <TouchableOpacity
-                        style={styles.imageButton}
-                        onPress={pickImage}
-                    >
-                        <Ionicons name="image" size={24} color="#007AFF" />
-                    </TouchableOpacity>
-                </View>
-
-                {selectedImages.length > 0 && (
-                    <View style={styles.selectedImages}>
-                        {selectedImages.map((uri, index) => (
-                            <View key={index} style={styles.imagePreview}>
-                                <Image source={{ uri }} style={styles.previewImage} />
+                    <ScrollView style={styles.modalContent}>
+                        {/* Affirmative Selection */}
+                        <View style={styles.affirmativeContainer}>
+                            <Text style={styles.affirmativeLabel}>Your stance:</Text>
+                            <View style={styles.affirmativeButtons}>
                                 <TouchableOpacity
-                                    style={styles.removeImage}
-                                    onPress={() => setSelectedImages(selectedImages.filter((_, i) => i !== index))}
+                                    style={[
+                                        styles.affirmativeButton,
+                                        isAffirmative === true && styles.affirmativeButtonSelected
+                                    ]}
+                                    onPress={() => setIsAffirmative(true)}
                                 >
-                                    <Ionicons name="close-circle" size={20} color="#dc3545" />
+                                    <Text style={[
+                                        styles.affirmativeButtonText,
+                                        isAffirmative === true && styles.affirmativeButtonTextSelected
+                                    ]}>
+                                        👍 For
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.affirmativeButton,
+                                        isAffirmative === false && styles.affirmativeButtonSelected
+                                    ]}
+                                    onPress={() => setIsAffirmative(false)}
+                                >
+                                    <Text style={[
+                                        styles.affirmativeButtonText,
+                                        isAffirmative === false && styles.affirmativeButtonTextSelected
+                                    ]}>
+                                        👎 Against
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
-                        ))}
-                    </View>
-                )}
+                        </View>
 
-                <TouchableOpacity
-                    style={[
-                        styles.submitButton, 
-                        ((!newComment.trim() && selectedImages.length === 0) || isAffirmative === null) && styles.disabledButton
-                    ]}
-                    onPress={submitComment}
-                    disabled={(!newComment.trim() && selectedImages.length === 0) || isAffirmative === null || submitting}
-                >
-                    {submitting ? (
-                        <ActivityIndicator color="white" />
-                    ) : (
-                        <Text style={styles.submitButtonText}>Post Comment</Text>
-                    )}
-                </TouchableOpacity>
-            </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                style={styles.textInput}
+                                value={newComment}
+                                onChangeText={setNewComment}
+                                placeholder="Add a comment..."
+                                multiline
+                                maxLength={500}
+                            />
+                            <TouchableOpacity
+                                style={styles.imageButton}
+                                onPress={pickImage}
+                            >
+                                <Ionicons name="image" size={24} color="#007AFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {selectedImages.length > 0 && (
+                            <View style={styles.selectedImages}>
+                                {selectedImages.map((uri, index) => (
+                                    <View key={index} style={styles.imagePreview}>
+                                        <Image source={{ uri }} style={styles.previewImage} />
+                                        <TouchableOpacity
+                                            style={styles.removeImage}
+                                            onPress={() => setSelectedImages(selectedImages.filter((_, i) => i !== index))}
+                                        >
+                                            <Ionicons name="close-circle" size={20} color="#dc3545" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        <TouchableOpacity
+                            style={[
+                                styles.submitButton, 
+                                ((!newComment.trim() && selectedImages.length === 0) || isAffirmative === null) && styles.disabledButton
+                            ]}
+                            onPress={submitComment}
+                            disabled={(!newComment.trim() && selectedImages.length === 0) || isAffirmative === null || submitting}
+                        >
+                            {submitting ? (
+                                <ActivityIndicator color="white" />
+                            ) : (
+                                <Text style={styles.submitButtonText}>Post Comment</Text>
+                            )}
+                        </TouchableOpacity>
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }
@@ -945,7 +1045,7 @@ const styles = StyleSheet.create({
     },
     commentsSection: {
         paddingHorizontal: 16,
-        paddingBottom: 100, // Space for input
+        paddingBottom: 20,
     },
     commentsTitle: {
         fontSize: 18,
@@ -1238,5 +1338,89 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#999',
         marginTop: 2,
+    },
+    addCommentButton: {
+        backgroundColor: '#007AFF',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+        marginHorizontal: 16,
+        marginBottom: 16,
+        gap: 8,
+    },
+    addCommentButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    modalContainer: {
+        flex: 1,
+        backgroundColor: '#f8f9fa',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: 'white',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+    },
+    closeButton: {
+        padding: 8,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#1a1a1a',
+        flex: 1,
+        textAlign: 'center',
+    },
+    modalContent: {
+        flex: 1,
+        padding: 16,
+    },
+    replyInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        gap: 8,
+        marginBottom: 8,
+    },
+    replyImageButton: {
+        padding: 6,
+    },
+    replySelectedImages: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 8,
+    },
+    replyImagePreview: {
+        position: 'relative',
+    },
+    replyPreviewImage: {
+        width: 50,
+        height: 50,
+        borderRadius: 6,
+    },
+    replyRemoveImage: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+    },
+    replyImageContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 8,
+    },
+    replyImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 6,
     },
 }); 

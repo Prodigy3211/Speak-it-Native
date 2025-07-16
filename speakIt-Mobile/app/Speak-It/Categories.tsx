@@ -12,6 +12,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { CATEGORIES } from '@/lib/constants';
+import { CATEGORY_IMAGES } from '@/lib/categoryImages';
 
 const { width } = Dimensions.get('window');
 
@@ -32,19 +33,10 @@ const categories: Category[] = CATEGORIES.map((name, index) => {
         'Entertainment': 'Movies, music, TV, and pop culture discussions'
     };
     
-    const imageUrls = {
-        'Prove Me Wrong': 'prove-me-wrong.jpg',
-        'Relationships': 'relationships.jpg',
-        'War': 'war.jpg',
-        'Politics': 'politics.jpg',
-        'Philosophy': 'philosophy.jpg',
-        'Entertainment': 'entertainment.jpg'
-    };
-    
     return {
         id: (index + 1).toString(),
         name,
-        imageUrl: imageUrls[name as keyof typeof imageUrls],
+        imageUrl: CATEGORY_IMAGES[name as keyof typeof CATEGORY_IMAGES],
         description: descriptions[name as keyof typeof descriptions]
     };
 });
@@ -62,22 +54,7 @@ export default function Categories() {
             const imageUrls: { [key: string]: string } = {};
             
             for (const category of categories) {
-                try {
-                    const { data, error } = await supabase.storage
-                        .from('speak-it-brand-assets')
-                        .createSignedUrl(category.imageUrl, 3600); // 1 hour expiry
-
-                    if (error) {
-                        console.error(`Error loading image for ${category.name}:`, error);
-                        // Use a default image or placeholder
-                        imageUrls[category.id] = 'https://via.placeholder.com/300x200?text=' + category.name;
-                    } else {
-                        imageUrls[category.id] = data.signedUrl;
-                    }
-                } catch (error) {
-                    console.error(`Error processing image for ${category.name}:`, error);
-                    imageUrls[category.id] = 'https://via.placeholder.com/300x200?text=' + category.name;
-                }
+                imageUrls[category.id] = category.imageUrl;
             }
             
             setCategoryImages(imageUrls);
