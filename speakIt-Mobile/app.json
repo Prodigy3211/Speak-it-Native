@@ -46,8 +46,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "5bd0baf7-8364-4882-a616-f528ca96e62e"
       }
-    }
+    },
+    "owner": "anasser91"
   }
 }
