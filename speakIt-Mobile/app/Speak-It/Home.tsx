@@ -13,7 +13,8 @@ export default function Home (){
     
     return(
            <View style={{flex: 1}}>
-            <Text>Welcome to SpeakIt
+            <Text>
+                "I went Straight to the comments section and I didn't regret It" - Ancient Black American Proverb
             </Text>
                 <Trending />
            </View>

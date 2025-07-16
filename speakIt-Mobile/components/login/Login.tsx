@@ -45,7 +45,7 @@ export default function Login ({isModalVisible, toggleModal}: LoginProps){
                 if (error) throw error;
                 Alert.alert('Success', 'Logged in successfully!');
                 toggleModal({} as GestureResponderEvent);
-                router.push('/Home');
+                router.push('/Speak-It/Home');
             }
         } catch (error: any) {
             Alert.alert('Error', error.message);
