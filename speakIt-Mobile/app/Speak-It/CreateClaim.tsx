@@ -16,6 +16,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { CATEGORIES } from '@/lib/constants';
+import { hapticFeedback } from '@/lib/haptics';
 
 const categories = CATEGORIES;
 
@@ -83,6 +84,7 @@ export default function CreateClaim() {
                             setRules('');
                             // Navigate to home
                             router.push('/Speak-It/Home');
+                            hapticFeedback.submit();
                         }
                     }
                 ]
@@ -100,7 +102,10 @@ export default function CreateClaim() {
             style={styles.container} 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <TouchableWithoutFeedback onPress={() => {
+                Keyboard.dismiss();
+                hapticFeedback.modal()
+            }}>
                 <ScrollView style={styles.scrollContainer}>
                     <Text style={styles.title}>Create a New Claim</Text>
                     <Text style={styles.subtitle}>
@@ -155,7 +160,11 @@ export default function CreateClaim() {
                                 styles.categoryButton,
                                 category === cat && styles.categoryButtonSelected
                             ]}
-                            onPress={() => setCategory(cat)}
+                            onPress={() => {
+                                setCategory(cat);
+                                hapticFeedback.select()
+                            }}
+                            onLongPress={() => hapticFeedback.longPress()}
                         >
                             <Text style={[
                                 styles.categoryButtonText,
@@ -190,7 +199,10 @@ export default function CreateClaim() {
             {/* Submit Button */}
             <TouchableOpacity
                 style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
+                onPress={() => {
+                    handleSubmit();
+                    hapticFeedback.submit()
+                }}
                 disabled={loading}
             >
                 {loading ? (

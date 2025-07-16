@@ -3,6 +3,7 @@ import {View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, S
 import { supabase } from "@/lib/supabase";
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { hapticFeedback } from '@/lib/haptics';
 
 interface Claim {
     id: string;
@@ -184,7 +185,10 @@ export default function Trending(){
     const renderClaimItem = ({ item }: {item: Claim}) => (
         <TouchableOpacity 
             style={styles.claimCard}
-            onPress={() => handleClaimPress(item)}
+            onPress={() => {
+                handleClaimPress(item);
+                hapticFeedback.navigate();
+            }}
         >
             <View style={styles.claimHeader}>
                 <Text style={styles.claimTitle} numberOfLines={2}>
@@ -194,7 +198,8 @@ export default function Trending(){
                     <TouchableOpacity
                         style={styles.shareButton}
                         onPress={async (e) => {
-                            e.stopPropagation(); // Prevent triggering the card press
+                            e.stopPropagation();
+                            hapticFeedback.share();
                             try {
                                 const deepLink = `speakitmobile://claim/${item.id}`;
                                 const appStoreLink = Platform.OS === 'ios' 
@@ -262,7 +267,10 @@ if (error) {
     return(
         <View style={styles.errorContainer}>
             <Text style={styles.errorText}>Error loading trending claims: {error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={fetchTrendingClaims}>
+            <TouchableOpacity style={styles.retryButton} onPress={() => {
+                fetchTrendingClaims();
+                hapticFeedback.modal();
+            }}>
                 <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
         </View>

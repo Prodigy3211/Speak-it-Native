@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { CATEGORIES } from '@/lib/constants';
 import { CATEGORY_IMAGES } from '@/lib/categoryImages';
+import { hapticFeedback } from '@/lib/haptics';
 
 const { width } = Dimensions.get('window');
 
@@ -76,7 +77,10 @@ export default function Categories() {
     const renderCategoryItem = ({ item }: { item: Category }) => (
         <TouchableOpacity
             style={styles.categoryCard}
-            onPress={() => handleCategoryPress(item)}
+            onPress={() => {
+                handleCategoryPress(item);
+                hapticFeedback.select();
+            }}
         >
             <View style={styles.imageContainer}>
                 <Image

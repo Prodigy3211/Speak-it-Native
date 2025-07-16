@@ -5,7 +5,7 @@
 //  Created by Amir Nasser on 7/9/25.
 //
 
-import {View, Text, StatusBar}  from "react-native";
+import {View, StatusBar}  from "react-native";
 import Trending from "@/components/dashboard/Trending";
 
 export default function Home (){

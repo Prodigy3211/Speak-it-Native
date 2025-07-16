@@ -7,6 +7,23 @@
 
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { TouchableOpacity } from "react-native";
+import * as Haptics from 'expo-haptics';
+
+// Custom tab bar button with haptic feedback
+const TabBarButton = ({ children, onPress, ...props }: any) => {
+    const handlePress = () => {
+        // Light haptic feedback for tab navigation
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+    };
+
+    return (
+        <TouchableOpacity onPress={handlePress} {...props}>
+            {children}
+        </TouchableOpacity>
+    );
+};
 
 export default function Layout(){
     return (
@@ -27,6 +44,8 @@ export default function Layout(){
                     fontWeight: 'bold',
                     fontSize: 32,
                 },
+                // Add haptic feedback to all tab bar buttons
+                tabBarButton: (props) => <TabBarButton {...props} />,
             }}
         >
             <Tabs.Screen

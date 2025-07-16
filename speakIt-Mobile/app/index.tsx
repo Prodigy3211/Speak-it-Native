@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { hapticFeedback } from "@/lib/haptics";
 
 export default function Index() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -63,6 +64,7 @@ export default function Index() {
                 setIsSignUp(false);
                 setEmail("");
                 setPassword("");
+                hapticFeedback.submit();
               },
             },
           ]
@@ -138,6 +140,8 @@ export default function Index() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                onPressIn={() => hapticFeedback.select(  
+                )}
               />
             </View>
 
@@ -147,6 +151,7 @@ export default function Index() {
                 style={styles.input}
                 placeholder="Password"
                 placeholderTextColor="#666"
+                onPress={() => hapticFeedback.select()}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -166,14 +171,18 @@ export default function Index() {
 
             <TouchableOpacity
               style={[styles.authButton, loading && styles.authButtonDisabled]}
-              onPress={handleAuth}
+              onPress={() => {
+                handleAuth();
+                hapticFeedback.submit();
+              }}
               disabled={loading}
+              onPressIn={() => hapticFeedback.select()}
             >
               {loading ? (
                 <ActivityIndicator color="white" />
               ) : (
                 <Text style={styles.authButtonText}>
-                  {isSignUp ? "Create Account" : "Sign In"}
+                  {isSignUp ? "Create Account" : "Login"}
                 </Text>
               )}
             </TouchableOpacity>
@@ -184,11 +193,12 @@ export default function Index() {
                 setIsSignUp(!isSignUp);
                 setEmail("");
                 setPassword("");
+                hapticFeedback.select();
               }}
             >
               <Text style={styles.switchText}>
                 {isSignUp
-                  ? "Already have an account? Sign In"
+                  ? "Already have an account? Login"
                   : "Don't have an account? Sign Up"}
               </Text>
             </TouchableOpacity>

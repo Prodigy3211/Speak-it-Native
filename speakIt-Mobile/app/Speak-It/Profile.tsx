@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { router } from "expo-router";
 import Statistics from "@/components/profile/Statistics";
+import { hapticFeedback } from "@/lib/haptics";
 
 interface UserStats {
     claims_made: number;
@@ -163,6 +164,8 @@ export default function Profile (){
                     text: 'Logout',
                     style: 'destructive',
                     onPress: async () => {
+                        hapticFeedback.modal();
+
                         try {
                             const { error } = await supabase.auth.signOut();
                             if (error) throw error;
@@ -197,13 +200,17 @@ export default function Profile (){
                         onPress={() => {
                             setNewUsername(userStats.username || '');
                             setEditingUsername(true);
+                            hapticFeedback.select();
                         }}
                     >
                         <Text style={styles.editButtonText}>Edit Profile</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                         style={styles.logoutButton}
-                        onPress={handleLogout}
+                        onPress={() => {
+                            handleLogout();
+                            hapticFeedback.modal();
+                        }}
                     >
                         <Text style={styles.logoutButtonText}>Logout</Text>
                     </TouchableOpacity>
@@ -220,6 +227,7 @@ export default function Profile (){
                         onChangeText={setNewUsername}
                         placeholder="Enter new username"
                         autoFocus
+                        onPressIn={() => hapticFeedback.select()}
                     />
                     <View style={styles.editButtons}>
                         <TouchableOpacity 
@@ -227,13 +235,18 @@ export default function Profile (){
                             onPress={() => {
                                 setEditingUsername(false);
                                 setNewUsername('');
+                                hapticFeedback.select();
                             }}
                         >
                             <Text style={styles.cancelButtonText}>Cancel</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
                             style={[styles.editButton, styles.saveButton]}
-                            onPress={handleEditProfile}
+                            onPress={() => {
+                                handleEditProfile();
+                                hapticFeedback.submit();
+                            }}
+                            onPressIn={() => hapticFeedback.submit()}
                         >
                             <Text style={styles.saveButtonText}>Save</Text>
                         </TouchableOpacity>

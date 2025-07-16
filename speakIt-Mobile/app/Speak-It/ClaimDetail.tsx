@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { hapticFeedback } from '@/lib/haptics';
 
 interface Comment {
     id: string;
@@ -351,6 +352,7 @@ export default function ClaimDetail() {
     };
 
     const handleVoteComment = async (commentId: string, voteType: 'up' | 'down') => {
+        hapticFeedback.vote();
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
@@ -464,6 +466,7 @@ export default function ClaimDetail() {
     };
 
     const submitComment = async () => {
+        hapticFeedback.submit();
         if (!newComment.trim() && selectedImages.length === 0) {
             Alert.alert('Error', 'Please enter a comment or add an image');
             return;
@@ -615,7 +618,10 @@ export default function ClaimDetail() {
                 <View style={styles.voteButtons}>
                     <TouchableOpacity
                         style={styles.voteButton}
-                        onPress={() => handleVoteComment(item.id, 'up')}
+                        onPress={() => {
+                            handleVoteComment(item.id, 'up');
+                            hapticFeedback.vote()
+                        }}
                     >
                         <Ionicons 
                             name="arrow-up" 
@@ -628,7 +634,10 @@ export default function ClaimDetail() {
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.voteButton}
-                        onPress={() => handleVoteComment(item.id, 'down')}
+                        onPress={() => {
+                            handleVoteComment(item.id, 'down');
+                            hapticFeedback.vote()
+                        }}
                     >
                         <Ionicons 
                             name="arrow-down" 
@@ -642,7 +651,10 @@ export default function ClaimDetail() {
                 </View>
                 <TouchableOpacity
                     style={styles.replyButton}
-                    onPress={() => setReplyingTo(item.id)}
+                    onPress={() => {
+                        setReplyingTo(item.id);
+                        hapticFeedback.select()
+                    }}
                 >
                     <Text style={styles.replyButtonText}>Reply</Text>
                 </TouchableOpacity>
@@ -672,6 +684,7 @@ export default function ClaimDetail() {
                                 });
                                 if (!result.canceled) {
                                     setReplyImages([...replyImages, result.assets[0].uri]);
+                                    hapticFeedback.upload()
                                 }
                             }}
                         >
@@ -686,7 +699,10 @@ export default function ClaimDetail() {
                                     <Image source={{ uri }} style={styles.replyPreviewImage} />
                                     <TouchableOpacity
                                         style={styles.replyRemoveImage}
-                                        onPress={() => setReplyImages(replyImages.filter((_, i) => i !== index))}
+                                        onPress={() => {
+                                            setReplyImages(replyImages.filter((_, i) => i !== index));
+                                            hapticFeedback.select()
+                                        }}
                                     >
                                         <Ionicons name="close-circle" size={16} color="#dc3545" />
                                     </TouchableOpacity>
@@ -702,6 +718,7 @@ export default function ClaimDetail() {
                                 setReplyingTo(null);
                                 setReplyText('');
                                 setReplyImages([]);
+                                hapticFeedback.select()
                             }}
                         >
                             <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -711,7 +728,10 @@ export default function ClaimDetail() {
                                 styles.submitReplyButton, 
                                 ((!replyText.trim() && replyImages.length === 0) || submitting) && styles.disabledButton
                             ]}
-                            onPress={() => submitReply(item.id)}
+                            onPress={() => {
+                                submitReply(item.id);
+                                hapticFeedback.submit()
+                            }}
                             disabled={(!replyText.trim() && replyImages.length === 0) || submitting}
                         >
                             {submitting ? (
@@ -767,14 +787,20 @@ export default function ClaimDetail() {
                                 <View style={styles.voteButtons}>
                                     <TouchableOpacity
                                         style={styles.voteButton}
-                                        onPress={() => handleVoteComment(reply.id, 'up')}
+                                        onPress={() => {
+                                            handleVoteComment(reply.id, 'up');
+                                            hapticFeedback.vote()
+                                        }}
                                     >
                                         <Ionicons name="arrow-up" size={14} color="#666" />
                                         <Text style={styles.voteText}>{reply.up_votes || 0}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={styles.voteButton}
-                                        onPress={() => handleVoteComment(reply.id, 'down')}
+                                        onPress={() => {
+                                            handleVoteComment(reply.id, 'down');
+                                            hapticFeedback.vote()
+                                        }}
                                     >
                                         <Ionicons name="arrow-down" size={14} color="#666" />
                                         <Text style={styles.voteText}>{reply.down_votes || 0}</Text>
@@ -782,7 +808,10 @@ export default function ClaimDetail() {
                                 </View>
                                 <TouchableOpacity
                                     style={styles.replyButton}
-                                    onPress={() => setReplyingTo(reply.id)}
+                                    onPress={() => {
+                                        setReplyingTo(reply.id);
+                                        hapticFeedback.select()
+                                    }}
                                 >
                                     <Text style={styles.replyButtonText}>Reply</Text>
                                 </TouchableOpacity>
@@ -800,7 +829,10 @@ export default function ClaimDetail() {
                                                     styles.affirmativeButton,
                                                     isAffirmative === true && styles.affirmativeButtonSelected
                                                 ]}
-                                                onPress={() => setIsAffirmative(true)}
+                                                onPress={() => {
+                                                    setIsAffirmative(true);
+                                                    hapticFeedback.select()
+                                                }}
                                             >
                                                 <Text style={[
                                                     styles.affirmativeButtonText,
@@ -814,7 +846,10 @@ export default function ClaimDetail() {
                                                     styles.affirmativeButton,
                                                     isAffirmative === false && styles.affirmativeButtonSelected
                                                 ]}
-                                                onPress={() => setIsAffirmative(false)}
+                                                onPress={() => {
+                                                    setIsAffirmative(false);
+                                                    hapticFeedback.select()
+                                                }}
                                             >
                                                 <Text style={[
                                                     styles.affirmativeButtonText,
@@ -846,8 +881,10 @@ export default function ClaimDetail() {
                                                     aspect: [4, 3],
                                                     quality: 0.8,
                                                 });
+                                                hapticFeedback.select()
                                                 if (!result.canceled) {
                                                     setReplyImages([...replyImages, result.assets[0].uri]);
+                                                    hapticFeedback.upload()
                                                 }
                                             }}
                                         >
@@ -862,7 +899,10 @@ export default function ClaimDetail() {
                                                     <Image source={{ uri }} style={styles.replyPreviewImage} />
                                                     <TouchableOpacity
                                                         style={styles.replyRemoveImage}
-                                                        onPress={() => setReplyImages(replyImages.filter((_, i) => i !== index))}
+                                                        onPress={() => {
+                                                            setReplyImages(replyImages.filter((_, i) => i !== index));
+                                                            hapticFeedback.select()
+                                                        }}
                                                     >
                                                         <Ionicons name="close-circle" size={16} color="#dc3545" />
                                                     </TouchableOpacity>
@@ -878,6 +918,7 @@ export default function ClaimDetail() {
                                                 setReplyingTo(null);
                                                 setReplyText('');
                                                 setReplyImages([]);
+                                                hapticFeedback.select()
                                             }}
                                         >
                                             <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -887,7 +928,10 @@ export default function ClaimDetail() {
                                                 styles.submitReplyButton, 
                                                 ((!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting) && styles.disabledButton
                                             ]}
-                                            onPress={() => submitReply(reply.id)}
+                                            onPress={() => {
+                                                submitReply(reply.id);
+                                                hapticFeedback.submit()
+                                            }}
                                             disabled={(!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting}
                                         >
                                             {submitting ? (
@@ -943,14 +987,20 @@ export default function ClaimDetail() {
                                                 <View style={styles.voteButtons}>
                                                     <TouchableOpacity
                                                         style={styles.voteButton}
-                                                        onPress={() => handleVoteComment(nestedReply.id, 'up')}
+                                                        onPress={() => {
+                                                            handleVoteComment(nestedReply.id, 'up');
+                                                            hapticFeedback.vote()
+                                                        }}
                                                     >
                                                         <Ionicons name="arrow-up" size={12} color="#666" />
                                                         <Text style={styles.voteText}>{nestedReply.up_votes || 0}</Text>
                                                     </TouchableOpacity>
                                                     <TouchableOpacity
                                                         style={styles.voteButton}
-                                                        onPress={() => handleVoteComment(nestedReply.id, 'down')}
+                                                        onPress={() => {
+                                                            handleVoteComment(nestedReply.id, 'down');
+                                                            hapticFeedback.vote()
+                                                        }}
                                                     >
                                                         <Ionicons name="arrow-down" size={12} color="#666" />
                                                         <Text style={styles.voteText}>{nestedReply.down_votes || 0}</Text>
@@ -958,7 +1008,10 @@ export default function ClaimDetail() {
                                                 </View>
                                                 <TouchableOpacity
                                                     style={styles.replyButton}
-                                                    onPress={() => setReplyingTo(nestedReply.id)}
+                                                    onPress={() => {
+                                                        setReplyingTo(nestedReply.id);
+                                                        hapticFeedback.select()
+                                                    }}
                                                 >
                                                     <Text style={styles.replyButtonText}>Reply</Text>
                                                 </TouchableOpacity>
@@ -976,7 +1029,10 @@ export default function ClaimDetail() {
                                                                     styles.affirmativeButton,
                                                                     isAffirmative === true && styles.affirmativeButtonSelected
                                                                 ]}
-                                                                onPress={() => setIsAffirmative(true)}
+                                                                onPress={() => {
+                                                                    setIsAffirmative(true);
+                                                                    hapticFeedback.select()
+                                                                }}
                                                             >
                                                                 <Text style={[
                                                                     styles.affirmativeButtonText,
@@ -990,7 +1046,10 @@ export default function ClaimDetail() {
                                                                     styles.affirmativeButton,
                                                                     isAffirmative === false && styles.affirmativeButtonSelected
                                                                 ]}
-                                                                onPress={() => setIsAffirmative(false)}
+                                                                onPress={() => {
+                                                                    setIsAffirmative(false);
+                                                                    hapticFeedback.select()
+                                                                }}
                                                             >
                                                                 <Text style={[
                                                                     styles.affirmativeButtonText,
@@ -1022,8 +1081,10 @@ export default function ClaimDetail() {
                                                                     aspect: [4, 3],
                                                                     quality: 0.8,
                                                                 });
+                                                                hapticFeedback.upload()
                                                                 if (!result.canceled) {
                                                                     setReplyImages([...replyImages, result.assets[0].uri]);
+                                                                    hapticFeedback.upload()
                                                                 }
                                                             }}
                                                         >
@@ -1038,7 +1099,9 @@ export default function ClaimDetail() {
                                                                     <Image source={{ uri }} style={styles.replyPreviewImage} />
                                                                     <TouchableOpacity
                                                                         style={styles.replyRemoveImage}
-                                                                        onPress={() => setReplyImages(replyImages.filter((_, i) => i !== index))}
+                                                                        onPress={() => {setReplyImages(replyImages.filter((_, i) => i !== index));
+                                                                            hapticFeedback.select()
+                                                                        }}
                                                                     >
                                                                         <Ionicons name="close-circle" size={16} color="#dc3545" />
                                                                     </TouchableOpacity>
@@ -1054,6 +1117,7 @@ export default function ClaimDetail() {
                                                                 setReplyingTo(null);
                                                                 setReplyText('');
                                                                 setReplyImages([]);
+                                                                hapticFeedback.select()
                                                             }}
                                                         >
                                                             <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -1063,7 +1127,10 @@ export default function ClaimDetail() {
                                                                 styles.submitReplyButton, 
                                                                 ((!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting) && styles.disabledButton
                                                             ]}
-                                                            onPress={() => submitReply(nestedReply.id)}
+                                                            onPress={() => {
+                                                                submitReply(nestedReply.id);
+                                                                hapticFeedback.submit()
+                                                            }}
                                                             disabled={(!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting}
                                                         >
                                                             {submitting ? (
@@ -1111,7 +1178,10 @@ export default function ClaimDetail() {
             <View style={styles.header}>
                 <TouchableOpacity
                     style={styles.backButton}
-                    onPress={() => router.back()}
+                    onPress={() => {
+                        router.back();
+                        hapticFeedback.navigate()
+                    }}
                 >
                     <Ionicons name="arrow-back" size={24} color="#007AFF" />
                 </TouchableOpacity>
@@ -1119,6 +1189,7 @@ export default function ClaimDetail() {
                 <TouchableOpacity
                     style={styles.shareButton}
                     onPress={async () => {
+                        hapticFeedback.share();
                         try {
                             const deepLink = `speakitmobile://claim/${claim.id}`;
                             const appStoreLink = Platform.OS === 'ios' 
@@ -1203,7 +1274,10 @@ export default function ClaimDetail() {
                 <View style={styles.commentButtonsContainer}>
                     <TouchableOpacity
                         style={styles.addCommentButton}
-                        onPress={() => setCommentModalVisible(true)}
+                        onPress={() => {
+                            setCommentModalVisible(true);
+                            hapticFeedback.select()
+                        }}
                     >
                         <Ionicons name="chatbubble-outline" size={20} color="white" />
                         <Text style={styles.addCommentButtonText}>Add Comment</Text>
@@ -1211,32 +1285,14 @@ export default function ClaimDetail() {
                     
                     <TouchableOpacity
                         style={styles.refreshButton}
-                        onPress={fetchComments}
+                        onPress= {() => {
+                            fetchComments();
+                            hapticFeedback.select()
+                        }}
                     >
                         <Ionicons name="refresh" size={20} color="#007AFF" />
                     </TouchableOpacity>
                     
-                    <TouchableOpacity
-                        style={styles.debugButton}
-                        onPress={async () => {
-                            console.log('=== DEBUG INFO ===');
-                            console.log('Claim ID:', claimId);
-                            console.log('Current comments state:', comments);
-                            console.log('Comments length:', comments.length);
-                            
-                            // Check database directly
-                            const { data: allComments, error } = await supabase
-                                .from('comments')
-                                .select('*')
-                                .eq('claim_id', claimId);
-                            
-                            console.log('Direct DB query result:', allComments);
-                            console.log('Direct DB query error:', error);
-                            console.log('=== END DEBUG ===');
-                        }}
-                    >
-                        <Ionicons name="bug" size={20} color="#FF6B35" />
-                    </TouchableOpacity>
                 </View>
 
                 {/* Comments Section */}
@@ -1259,6 +1315,8 @@ export default function ClaimDetail() {
                 animationType="fade"
                 transparent={true}
                 onRequestClose={() => setCommentModalVisible(false)}
+                onShow={() => hapticFeedback.modal()}
+                onDismiss={() => hapticFeedback.modal()}
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
@@ -1271,6 +1329,7 @@ export default function ClaimDetail() {
                                     setNewComment('');
                                     setSelectedImages([]);
                                     setIsAffirmative(null);
+                                    hapticFeedback.select();
                                 }}
                             >
                                 <Ionicons name="close" size={24} color="#666" />
@@ -1287,7 +1346,10 @@ export default function ClaimDetail() {
                                             styles.affirmativeButton,
                                             isAffirmative === true && styles.affirmativeButtonSelected
                                         ]}
-                                        onPress={() => setIsAffirmative(true)}
+                                        onPress={() => {
+                                            setIsAffirmative(true); 
+                                            hapticFeedback.select()}}
+                                        onLongPress={() => hapticFeedback.longPress()}
                                     >
                                         <Text style={[
                                             styles.affirmativeButtonText,
@@ -1301,7 +1363,10 @@ export default function ClaimDetail() {
                                             styles.affirmativeButton,
                                             isAffirmative === false && styles.affirmativeButtonSelected
                                         ]}
-                                        onPress={() => setIsAffirmative(false)}
+                                        onPress={() => {
+                                            setIsAffirmative(false);
+                                            hapticFeedback.select()
+                                        }}
                                     >
                                         <Text style={[
                                             styles.affirmativeButtonText,
@@ -1326,7 +1391,10 @@ export default function ClaimDetail() {
                                 />
                                 <TouchableOpacity
                                     style={styles.modalImageButton}
-                                    onPress={pickImage}
+                                    onPress={() => {
+                                        pickImage();
+                                        hapticFeedback.upload()
+                                    }}
                                 >
                                     <Ionicons name="image" size={24} color="#007AFF" />
                                 </TouchableOpacity>
@@ -1339,7 +1407,10 @@ export default function ClaimDetail() {
                                             <Image source={{ uri }} style={styles.previewImage} />
                                             <TouchableOpacity
                                                 style={styles.removeImage}
-                                                onPress={() => setSelectedImages(selectedImages.filter((_, i) => i !== index))}
+                                                onPress={() => {
+                                                    setSelectedImages(selectedImages.filter((_, i) => i !== index));
+                                                    hapticFeedback.select()
+                                                }}
                                             >
                                                 <Ionicons name="close-circle" size={20} color="#dc3545" />
                                             </TouchableOpacity>
@@ -1353,7 +1424,9 @@ export default function ClaimDetail() {
                                     styles.modalSubmitButton, 
                                     ((!newComment.trim() && selectedImages.length === 0) || isAffirmative === null || submitting) && styles.disabledButton
                                 ]}
-                                onPress={submitComment}
+                                onPress={() => {
+                                        submitComment(); 
+                                        hapticFeedback.submit()}}
                                 disabled={(!newComment.trim() && selectedImages.length === 0) || isAffirmative === null || submitting}
                             >
                                 {submitting ? (
