@@ -207,7 +207,20 @@ export default function Index() {
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              By continuing, you agree to our Terms of Service and Privacy Policy
+              By continuing, you agree to our{' '}
+              <Text 
+                style={styles.linkText}
+                onPress={() => router.push('/legal/terms')}
+              >
+                Terms of Service
+              </Text>
+              {' '}and{' '}
+              <Text 
+                style={styles.linkText}
+                onPress={() => router.push('/legal/privacy')}
+              >
+                Privacy Policy
+              </Text>
             </Text>
           </View>
         </ScrollView>
@@ -322,5 +335,9 @@ const styles = StyleSheet.create({
     color: "#999",
     textAlign: "center",
     lineHeight: 16,
+  },
+  linkText: {
+    color: "#007AFF",
+    textDecorationLine: "underline",
   },
 });
