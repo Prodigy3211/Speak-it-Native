@@ -10,6 +10,7 @@ import { View,Text,StyleSheet, Modal, Button, GestureResponderEvent, TextInput, 
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { router } from 'expo-router';
+import { hapticFeedback } from '@/lib/haptics';
 
 interface LoginProps {
     isModalVisible: boolean;
@@ -86,14 +87,24 @@ export default function Login ({isModalVisible, toggleModal}: LoginProps){
                   />
                   <Button 
                     title={loading ? "Loading..." : (isSignUp ? "Sign Up" : "Login")} 
-                    onPress={handleAuth}
+                    onPress={async () => {
+                        // Trigger haptic feedback immediately
+                        hapticFeedback.submit();
+                        // Then handle authentication
+                        await handleAuth();
+                    }}
                     disabled={loading}
                   />
                   <Button 
                     title={isSignUp ? "Already have an account? Login" : "No Account? Sign Up"} 
-                    onPress={() => setIsSignUp(!isSignUp)}
+                    onPress={() => {
+                        setIsSignUp(!isSignUp);
+                        hapticFeedback.select();
+                    }}
                   />
-              <Button title= "Close" onPress={toggleModal} />
+              <Button title= "Close" onPress={ ()=> {toggleModal({} as GestureResponderEvent);
+                hapticFeedback.select();
+              }} />
               </View>
               </View>
              </Modal>

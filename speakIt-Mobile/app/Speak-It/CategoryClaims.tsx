@@ -13,6 +13,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { hapticFeedback } from '@/lib/haptics';
 
 interface Claim {
     id: string;
@@ -237,7 +238,10 @@ export default function CategoryClaims() {
     const renderClaimItem = ({ item }: { item: Claim }) => (
         <TouchableOpacity
             style={styles.claimCard}
-            onPress={() => handleClaimPress(item)}
+            onPress={() => {
+                handleClaimPress(item);
+                hapticFeedback.select();
+            }}
         >
             <View style={styles.claimHeader}>
                 <Text style={styles.claimTitle} numberOfLines={2}>
@@ -249,6 +253,7 @@ export default function CategoryClaims() {
                         onPress={(e) => {
                             e.stopPropagation(); // Prevent triggering the card press
                             handleShare(item);
+                            hapticFeedback.share();
                         }}
                     >
                         <Ionicons name="share-outline" size={16} color="#666" />
@@ -307,7 +312,10 @@ export default function CategoryClaims() {
         return (
             <View style={styles.errorContainer}>
                 <Text style={styles.errorText}>Error loading claims: {error}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={fetchCategoryClaims}>
+                <TouchableOpacity style={styles.retryButton} onPress={() => {
+                    fetchCategoryClaims();
+                    hapticFeedback.modal();
+                }}>
                     <Text style={styles.retryButtonText}>Retry</Text>
                 </TouchableOpacity>
             </View>
@@ -319,7 +327,10 @@ export default function CategoryClaims() {
             <View style={styles.header}>
                 <TouchableOpacity
                     style={styles.backButton}
-                    onPress={() => router.back()}
+                    onPress={() => {
+                        router.back();
+                        hapticFeedback.navigate();
+                    }}
                 >
                     <Ionicons name="arrow-back" size={24} color="#007AFF" />
                 </TouchableOpacity>
@@ -336,7 +347,10 @@ export default function CategoryClaims() {
                     </Text>
                     <TouchableOpacity
                         style={styles.createButton}
-                        onPress={() => router.push('/Speak-It/CreateClaim')}
+                        onPress={() => {
+                            router.push('/Speak-It/CreateClaim');
+                            hapticFeedback.select();
+                        }}
                     >
                         <Text style={styles.createButtonText}>Create First Claim</Text>
                     </TouchableOpacity>
