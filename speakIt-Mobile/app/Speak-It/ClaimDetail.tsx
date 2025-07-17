@@ -13,7 +13,8 @@ import {
     KeyboardAvoidingView,
     Platform,
     Modal,
-    Share
+    Share,
+    Dimensions
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
@@ -69,6 +70,7 @@ export default function ClaimDetail() {
     const [replyImages, setReplyImages] = useState<string[]>([]);
     const [isAffirmative, setIsAffirmative] = useState<boolean | null>(null);
     const [commentModalVisible, setCommentModalVisible] = useState(false);
+    const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
     useEffect(() => {
         if (claimId) {
@@ -604,12 +606,19 @@ export default function ClaimDetail() {
             {item.images.length > 0 && (
                 <View style={styles.imageContainer}>
                     {item.images.map((image) => (
-                        <Image
+                        <TouchableOpacity
                             key={image.id}
-                            source={{ uri: image.image_url }}
-                            style={styles.commentImage}
-                            resizeMode="cover"
-                        />
+                            onPress={() => {
+                                setExpandedImage(image.image_url);
+                                hapticFeedback.select();
+                            }}
+                        >
+                            <Image
+                                source={{ uri: image.image_url }}
+                                style={styles.commentImage}
+                                resizeMode="cover"
+                            />
+                        </TouchableOpacity>
                     ))}
                 </View>
             )}
@@ -773,12 +782,19 @@ export default function ClaimDetail() {
                             {reply.images && reply.images.length > 0 && (
                                 <View style={styles.replyImageContainer}>
                                     {reply.images.map((image) => (
-                                        <Image
+                                        <TouchableOpacity
                                             key={image.id}
-                                            source={{ uri: image.image_url }}
-                                            style={styles.replyImage}
-                                            resizeMode="cover"
-                                        />
+                                            onPress={() => {
+                                                setExpandedImage(image.image_url);
+                                                hapticFeedback.select();
+                                            }}
+                                        >
+                                            <Image
+                                                source={{ uri: image.image_url }}
+                                                style={styles.replyImage}
+                                                resizeMode="cover"
+                                            />
+                                        </TouchableOpacity>
                                     ))}
                                 </View>
                             )}
@@ -973,12 +989,19 @@ export default function ClaimDetail() {
                                             {nestedReply.images && nestedReply.images.length > 0 && (
                                                 <View style={styles.nestedReplyImageContainer}>
                                                     {nestedReply.images.map((image) => (
-                                                        <Image
+                                                        <TouchableOpacity
                                                             key={image.id}
-                                                            source={{ uri: image.image_url }}
-                                                            style={styles.nestedReplyImage}
-                                                            resizeMode="cover"
-                                                        />
+                                                            onPress={() => {
+                                                                setExpandedImage(image.image_url);
+                                                                hapticFeedback.select();
+                                                            }}
+                                                        >
+                                                            <Image
+                                                                source={{ uri: image.image_url }}
+                                                                style={styles.nestedReplyImage}
+                                                                resizeMode="cover"
+                                                            />
+                                                        </TouchableOpacity>
                                                     ))}
                                                 </View>
                                             )}
@@ -1439,6 +1462,47 @@ export default function ClaimDetail() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Expanded Image Modal */}
+            {expandedImage && (
+                <Modal
+                    visible={expandedImage !== null}
+                    animationType="fade"
+                    transparent={true}
+                    onRequestClose={() => {
+                        setExpandedImage(null);
+                        hapticFeedback.select();
+                    }}
+                    onShow={() => hapticFeedback.modal()}
+                    onDismiss={() => hapticFeedback.modal()}
+                >
+                    <View style={styles.expandedImageOverlay}>
+                        <TouchableOpacity
+                            style={styles.expandedImageContainer}
+                            activeOpacity={1}
+                            onPress={() => {
+                                setExpandedImage(null);
+                                hapticFeedback.select();
+                            }}
+                        >
+                            <TouchableOpacity
+                                style={styles.expandedImageCloseButton}
+                                onPress={() => {
+                                    setExpandedImage(null);
+                                    hapticFeedback.select();
+                                }}
+                            >
+                                <Ionicons name="close-circle" size={32} color="white" />
+                            </TouchableOpacity>
+                            <Image
+                                source={{ uri: expandedImage }}
+                                style={styles.expandedImage}
+                                resizeMode="contain"
+                            />
+                        </TouchableOpacity>
+                    </View>
+                </Modal>
+            )}
         </KeyboardAvoidingView>
     );
 }
@@ -2113,5 +2177,30 @@ const styles = StyleSheet.create({
     },
     shareButton: {
         padding: 8,
+    },
+    expandedImageOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.95)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    expandedImageContainer: {
+        flex: 1,
+        width: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    expandedImageCloseButton: {
+        position: 'absolute',
+        top: 50,
+        right: 20,
+        zIndex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 20,
+        padding: 4,
+    },
+    expandedImage: {
+        width: Dimensions.get('window').width,
+        height: Dimensions.get('window').height,
     },
 }); 
