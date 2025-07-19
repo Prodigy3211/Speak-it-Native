@@ -149,19 +149,18 @@ export default function CategoryClaims() {
             setLoading(true);
             setError(null);
 
-            // Get claims for the specific category (case-insensitive)
+            // Get claims for the specific category (case-insensitive) excluding blocked users
             const { data: categoryClaims, error: claimsError } = await supabase
-                .from('claims')
-                .select('*')
-                .ilike('category', category)
-                .order('created_at', { ascending: false });
+                .rpc('get_claims_excluding_blocked', {
+                    category_param: category
+                });
 
             if (claimsError) {
                 throw claimsError;
             }
 
             // Get usernames for claim creators
-            const claimCreatorIds = categoryClaims?.map(claim => claim.op_id).filter(Boolean) || [];
+            const claimCreatorIds = categoryClaims?.map((claim: any) => claim.op_id).filter(Boolean) || [];
             const { data: profiles, error: profilesError } = await supabase
                 .from('profiles')
                 .select('user_id, username')
@@ -179,7 +178,7 @@ export default function CategoryClaims() {
 
             // Get comment counts and stance statistics for each claim
             const claimsWithStats = await Promise.all(
-                categoryClaims?.map(async (claim) => {
+                categoryClaims?.map(async (claim: any) => {
                     const commentsWithReplies = await getCommentsWithReplies(claim.id);
                     const commentStats = countCommentsRecursively(commentsWithReplies);
                     

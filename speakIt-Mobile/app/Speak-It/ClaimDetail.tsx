@@ -24,6 +24,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { hapticFeedback } from '@/lib/haptics';
 import { validateUserContent } from '@/lib/contentModeration';
 import FlagContent from '@/components/FlagContent';
+import BlockUser from '@/components/BlockUser';
 
 interface Comment {
     id: string;
@@ -55,6 +56,7 @@ interface Claim {
     created_at: string;
     up_votes: number;
     down_votes: number;
+    op_id: string;
     op_username: string;
     user_vote?: 'up' | 'down' | null;
 }
@@ -192,28 +194,24 @@ export default function ClaimDetail() {
 
     const fetchComments = async () => {
         try {
-            // First, let's get ALL comments for this claim to see the total count
+            // Use the blocking-aware function to get comments excluding blocked users
             const { data: allComments, error: allCommentsError } = await supabase
-                .from('comments')
-                .select('*')
-                .eq('claim_id', claimId)
-                .order('created_at', { ascending: false });
+                .rpc('get_comments_excluding_blocked', {
+                    claim_id_param: claimId
+                });
 
             if (allCommentsError) throw allCommentsError;
             
-            // Get top-level comments (parent_comment_id is null)
-            const { data: initialCommentsData, error: commentsError } = await supabase
-                .from('comments')
-                .select('*')
-                .eq('claim_id', claimId)
-                .is('parent_comment_id', null)
-                .order('created_at', { ascending: false });
-
-            if (commentsError) throw commentsError;
+            // Get top-level comments (parent_comment_id is null) from the filtered results
+            const initialCommentsData = allComments?.filter((comment: any) => 
+                comment.parent_comment_id === null
+            ).sort((a: any, b: any) => 
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            ) || [];
             
             // Check for orphaned comments (comments with parent_comment_id that don't exist)
-            const validParentIds = new Set(allComments?.map(c => c.id) || []);
-            const orphanedComments = allComments?.filter(comment => 
+            const validParentIds = new Set(allComments?.map((c: any) => c.id) || []);
+            const orphanedComments = allComments?.filter((comment: any) => 
                 comment.parent_comment_id && !validParentIds.has(comment.parent_comment_id)
             ) || [];
             
@@ -221,14 +219,14 @@ export default function ClaimDetail() {
             
             if (orphanedComments.length > 0) {
                 // Convert orphaned comments to top-level comments for display
-                const fixedOrphanedComments = orphanedComments.map(comment => ({
+                const fixedOrphanedComments = orphanedComments.map((comment: any) => ({
                     ...comment,
                     parent_comment_id: null
                 }));
                 
                 // Add orphaned comments to the top-level comments list
                 const allTopLevelComments = [...(commentsData || []), ...fixedOrphanedComments];
-                commentsData = allTopLevelComments.sort((a, b) => 
+                commentsData = allTopLevelComments.sort((a: any, b: any) => 
                     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
                 );
             }
@@ -236,11 +234,11 @@ export default function ClaimDetail() {
             // If we have comments but no top-level comments, there might be a schema issue
             if (allComments && allComments.length > 0 && (!commentsData || commentsData.length === 0)) {
                 console.warn('WARNING: Found comments but no top-level comments. This might indicate a schema issue.');
-                console.log('All comments parent_comment_id values:', allComments.map(c => ({ id: c.id, parent_id: c.parent_comment_id })));
+                console.log('All comments parent_comment_id values:', allComments.map((c: any) => ({ id: c.id, parent_id: c.parent_comment_id })));
                 
                 // TEMPORARY FALLBACK: Show all comments as top-level if schema is broken
                 console.log('Using fallback: showing all comments as top-level');
-                const fallbackComments = allComments.map(comment => ({
+                const fallbackComments = allComments.map((comment: any) => ({
                     ...comment,
                     parent_comment_id: null // Force all to be top-level
                 }));
@@ -276,7 +274,7 @@ export default function ClaimDetail() {
 
             // Get usernames and images for comments
             const commentsWithDetails = await Promise.all(
-                commentsData.map(async (comment) => {
+                commentsData.map(async (comment: any) => {
                     const { data: profile } = await supabase
                         .from('profiles')
                         .select('username')
@@ -741,6 +739,11 @@ export default function ClaimDetail() {
                         contentId={item.id}
                         contentType="comment"
                         contentText={item.content}
+                    />
+                    <BlockUser
+                        userId={item.user_id}
+                        username={item.username}
+                        size="small"
                     />
                 </View>
             </View>
@@ -1345,11 +1348,18 @@ export default function ClaimDetail() {
                                 {new Date(claim.created_at).toLocaleDateString()}
                             </Text>
                         </View>
-                        <FlagContent
-                            contentId={claim.id}
-                            contentType="claim"
-                            contentText={claim.title + " " + claim.claim}
-                        />
+                        <View style={styles.claimActions}>
+                            <FlagContent
+                                contentId={claim.id}
+                                contentType="claim"
+                                contentText={claim.title + " " + claim.claim}
+                            />
+                            <BlockUser
+                                userId={claim.op_id}
+                                username={claim.op_username}
+                                size="small"
+                            />
+                        </View>
                     </View>
                 </View>
 
@@ -1715,6 +1725,11 @@ const styles = StyleSheet.create({
     },
     claimStats: {
         flex: 1,
+    },
+    claimActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     authorText: {
         fontSize: 14,

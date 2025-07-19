@@ -65,12 +65,11 @@ export default function Trending(){
     // Function to get all comments for a claim with nested replies
     const getCommentsWithReplies = async (claimId: string): Promise<Comment[]> => {
         try {
-            // Get all comments for this claim
+            // Get all comments for this claim (excluding blocked users)
             const { data: allComments, error: allCommentsError } = await supabase
-                .from('comments')
-                .select('*')
-                .eq('claim_id', claimId)
-                .order('created_at', { ascending: true });
+                .rpc('get_comments_excluding_blocked', {
+                    claim_id_param: claimId
+                });
 
             if (allCommentsError) {
                 console.error('Error fetching comments for claim', claimId, ':', allCommentsError);
@@ -133,12 +132,11 @@ export default function Trending(){
             setLoading(true);
             setError(null);
         
-            // Get all claims first
+            // Get all claims first (excluding blocked users)
             const { data: claims, error: claimsError } = await supabase
-                .from('claims')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(20); // Get more claims to filter from
+                .rpc('get_claims_excluding_blocked', {
+                    category_param: null
+                });
 
             if (claimsError) {
                 throw claimsError;
