@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
+import FlagContent from '@/components/FlagContent';
 
 interface Claim {
     id: string;
@@ -258,6 +259,11 @@ export default function CategoryClaims() {
                     >
                         <Ionicons name="share-outline" size={16} color="#666" />
                     </TouchableOpacity>
+                    <FlagContent
+                        contentId={item.id}
+                        contentType="claim"
+                        contentText={item.title + " " + item.claim}
+                    />
                     <View style={styles.categoryBadge}>
                         <Text style={styles.categoryText}>{item.category}</Text>
                     </View>

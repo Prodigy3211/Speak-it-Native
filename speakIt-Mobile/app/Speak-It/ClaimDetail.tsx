@@ -22,6 +22,8 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { hapticFeedback } from '@/lib/haptics';
+import { validateUserContent } from '@/lib/contentModeration';
+import FlagContent from '@/components/FlagContent';
 
 interface Comment {
     id: string;
@@ -469,6 +471,35 @@ export default function ClaimDetail() {
 
     const submitComment = async () => {
         hapticFeedback.submit();
+        
+        // Content validation (no blocking, only warnings)
+        if (newComment.trim()) {
+            const commentValidation = validateUserContent(newComment, 'comment');
+            if (!commentValidation.isValid) {
+                Alert.alert('Validation Error', commentValidation.errorMessage || 'Please review your comment');
+                return;
+            }
+            
+            // Check for content warnings
+            if (commentValidation.warning) {
+                Alert.alert(
+                    'Content Warning',
+                    commentValidation.warning + '\n\nYou can still submit your comment, but it may be flagged by the community.',
+                    [
+                        {
+                            text: 'Submit Anyway',
+                            onPress: () => submitCommentToDatabase()
+                        },
+                        {
+                            text: 'Edit Comment',
+                            style: 'cancel'
+                        }
+                    ]
+                );
+                return;
+            }
+        }
+        
         if (!newComment.trim() && selectedImages.length === 0) {
             Alert.alert('Error', 'Please enter a comment or add an image');
             return;
@@ -479,6 +510,11 @@ export default function ClaimDetail() {
             return;
         }
 
+        // Submit the comment
+        submitCommentToDatabase();
+    };
+    
+    const submitCommentToDatabase = async () => {
         try {
             setSubmitting(true);
             const { data: { user } } = await supabase.auth.getUser();
@@ -527,11 +563,44 @@ export default function ClaimDetail() {
     };
 
     const submitReply = async (parentCommentId: string) => {
+        // Content validation (no blocking, only warnings)
+        if (replyText.trim()) {
+            const replyValidation = validateUserContent(replyText, 'comment');
+            if (!replyValidation.isValid) {
+                Alert.alert('Validation Error', replyValidation.errorMessage || 'Please review your reply');
+                return;
+            }
+            
+            // Check for content warnings
+            if (replyValidation.warning) {
+                Alert.alert(
+                    'Content Warning',
+                    replyValidation.warning + '\n\nYou can still submit your reply, but it may be flagged by the community.',
+                    [
+                        {
+                            text: 'Submit Anyway',
+                            onPress: () => submitReplyToDatabase(parentCommentId)
+                        },
+                        {
+                            text: 'Edit Reply',
+                            style: 'cancel'
+                        }
+                    ]
+                );
+                return;
+            }
+        }
+        
         if (!replyText.trim() && replyImages.length === 0) {
             Alert.alert('Error', 'Please enter a reply or add an image');
             return;
         }
 
+        // Submit the reply
+        submitReplyToDatabase(parentCommentId);
+    };
+    
+    const submitReplyToDatabase = async (parentCommentId: string) => {
         try {
             setSubmitting(true);
             const { data: { user } } = await supabase.auth.getUser();
@@ -658,15 +727,22 @@ export default function ClaimDetail() {
                         </Text>
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                    style={styles.replyButton}
-                    onPress={() => {
-                        setReplyingTo(item.id);
-                        hapticFeedback.select()
-                    }}
-                >
-                    <Text style={styles.replyButtonText}>Reply</Text>
-                </TouchableOpacity>
+                <View style={styles.commentActionButtons}>
+                    <TouchableOpacity
+                        style={styles.replyButton}
+                        onPress={() => {
+                            setReplyingTo(item.id);
+                            hapticFeedback.select()
+                        }}
+                    >
+                        <Text style={styles.replyButtonText}>Reply</Text>
+                    </TouchableOpacity>
+                    <FlagContent
+                        contentId={item.id}
+                        contentType="comment"
+                        contentText={item.content}
+                    />
+                </View>
             </View>
 
             {replyingTo === item.id && (
@@ -822,15 +898,22 @@ export default function ClaimDetail() {
                                         <Text style={styles.voteText}>{reply.down_votes || 0}</Text>
                                     </TouchableOpacity>
                                 </View>
-                                <TouchableOpacity
-                                    style={styles.replyButton}
-                                    onPress={() => {
-                                        setReplyingTo(reply.id);
-                                        hapticFeedback.select()
-                                    }}
-                                >
-                                    <Text style={styles.replyButtonText}>Reply</Text>
-                                </TouchableOpacity>
+                                <View style={styles.commentActionButtons}>
+                                    <TouchableOpacity
+                                        style={styles.replyButton}
+                                        onPress={() => {
+                                            setReplyingTo(reply.id);
+                                            hapticFeedback.select()
+                                        }}
+                                    >
+                                        <Text style={styles.replyButtonText}>Reply</Text>
+                                    </TouchableOpacity>
+                                    <FlagContent
+                                        contentId={reply.id}
+                                        contentType="comment"
+                                        contentText={reply.content}
+                                    />
+                                </View>
                             </View>
 
                             {/* Reply input for replies */}
@@ -1262,6 +1345,11 @@ export default function ClaimDetail() {
                                 {new Date(claim.created_at).toLocaleDateString()}
                             </Text>
                         </View>
+                        <FlagContent
+                            contentId={claim.id}
+                            contentType="claim"
+                            contentText={claim.title + " " + claim.claim}
+                        />
                     </View>
                 </View>
 
@@ -1709,6 +1797,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+    },
+    commentActionButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     replyButton: {
         padding: 4,

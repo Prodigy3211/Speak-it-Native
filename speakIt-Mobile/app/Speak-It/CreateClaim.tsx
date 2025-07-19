@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { CATEGORIES } from '@/lib/constants';
 import { hapticFeedback } from '@/lib/haptics';
+import { validateUserContent } from '@/lib/contentModeration';
 
 const categories = CATEGORIES;
 
@@ -32,7 +33,52 @@ export default function CreateClaim() {
     const rulesInputRef = useRef<TextInput>(null);
 
     const handleSubmit = async () => {
-        // Validation
+        // Content validation (no blocking, only warnings)
+        const titleValidation = validateUserContent(title, 'title');
+        const claimValidation = validateUserContent(claim, 'claim');
+        const rulesValidation = rules.trim() ? validateUserContent(rules, 'comment') : { isValid: true };
+        
+        if (!titleValidation.isValid) {
+            Alert.alert('Validation Error', titleValidation.errorMessage || 'Please review your title');
+            return;
+        }
+        
+        if (!claimValidation.isValid) {
+            Alert.alert('Validation Error', claimValidation.errorMessage || 'Please review your claim');
+            return;
+        }
+        
+        if (!rulesValidation.isValid) {
+            Alert.alert('Validation Error', rulesValidation.errorMessage || 'Please review your rules');
+            return;
+        }
+        
+        // Check for content warnings
+        const warnings = [];
+        if (titleValidation.warning) warnings.push('Title: ' + titleValidation.warning);
+        if (claimValidation.warning) warnings.push('Claim: ' + claimValidation.warning);
+        if (rulesValidation.warning) warnings.push('Rules: ' + rulesValidation.warning);
+        
+        // Show warning if needed, but allow submission
+        if (warnings.length > 0) {
+            Alert.alert(
+                'Content Warning',
+                warnings.join('\n\n') + '\n\nYou can still submit your claim, but it may be flagged by the community.',
+                [
+                    {
+                        text: 'Submit Anyway',
+                        onPress: () => submitClaim(titleValidation, claimValidation, rulesValidation)
+                    },
+                    {
+                        text: 'Edit Content',
+                        style: 'cancel'
+                    }
+                ]
+            );
+            return;
+        }
+        
+        // Basic validation
         if (!title.trim()) {
             Alert.alert('Error', 'Please enter a title for your claim');
             return;
@@ -45,6 +91,12 @@ export default function CreateClaim() {
             Alert.alert('Error', 'Please select a category');
             return;
         }
+        
+        // Submit the claim
+        submitClaim(titleValidation, claimValidation, rulesValidation);
+    };
+    
+    const submitClaim = async (titleValidation?: any, claimValidation?: any, rulesValidation?: any) => {
 
         setLoading(true);
         try {

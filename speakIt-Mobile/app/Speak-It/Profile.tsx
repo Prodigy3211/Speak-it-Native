@@ -5,12 +5,14 @@
 //  Created by Amir Nasser on 7/9/25.
 //
 
-import {Text, View, StyleSheet, TouchableOpacity, Alert, TextInput}  from "react-native";
+import {Text, View, StyleSheet, TouchableOpacity, Alert, TextInput, Modal}  from "react-native";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { router } from "expo-router";
 import Statistics from "@/components/profile/Statistics";
 import { hapticFeedback } from "@/lib/haptics";
+import { validateUserContent } from "@/lib/contentModeration";
+import AdminFlagDashboard from "@/components/AdminFlagDashboard";
 
 interface UserStats {
     claims_made: number;
@@ -18,6 +20,7 @@ interface UserStats {
     up_votes_received: number;
     down_votes_received: number;
     username?: string;
+    is_admin?: boolean;
 }
 
 export default function Profile (){
@@ -31,6 +34,7 @@ export default function Profile (){
     const [loading, setLoading] = useState(true);
     const [editingUsername, setEditingUsername] = useState(false);
     const [newUsername, setNewUsername] = useState('');
+    const [adminDashboardVisible, setAdminDashboardVisible] = useState(false);
 
     useEffect(() => {
         fetchUserStats();
@@ -41,10 +45,10 @@ export default function Profile (){
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            // Get user profile data including username
+            // Get user profile data including username and admin status
             let { data: profile, error: profileError } = await supabase
                 .from('profiles')
-                .select('username')
+                .select('username, is_admin')
                 .eq('user_id', user.id)
                 .single();
 
@@ -55,9 +59,10 @@ export default function Profile (){
                     .insert({
                         user_id: user.id,
                         username: 'Anon',
-                        bio: ''
+                        bio: '',
+                        is_admin: false
                     })
-                    .select('username')
+                    .select('username, is_admin')
                     .single();
 
                 if (createError) {
@@ -108,7 +113,8 @@ export default function Profile (){
                 comments_made: commentsCount || 0,
                 up_votes_received: upVotesReceived,
                 down_votes_received: downVotesReceived,
-                username: profile?.username || 'User'
+                username: profile?.username || 'User',
+                is_admin: profile?.is_admin || false
             });
         } catch (error) {
             console.error('Error fetching user stats:', error);
@@ -118,11 +124,42 @@ export default function Profile (){
     };
 
     const handleEditProfile = async () => {
+        // Content validation (no blocking, only warnings)
+        const usernameValidation = validateUserContent(newUsername, 'username');
+        if (!usernameValidation.isValid) {
+            Alert.alert('Validation Error', usernameValidation.errorMessage || 'Please review your username');
+            return;
+        }
+
         if (!newUsername.trim()) {
             Alert.alert('Error', 'Username cannot be empty');
             return;
         }
 
+        // Check for content warnings
+        if (usernameValidation.warning) {
+            Alert.alert(
+                'Content Warning',
+                usernameValidation.warning + '\n\nYou can still use this username, but it may be flagged by the community.',
+                [
+                    {
+                        text: 'Use Anyway',
+                        onPress: () => updateUsername()
+                    },
+                    {
+                        text: 'Edit Username',
+                        style: 'cancel'
+                    }
+                ]
+            );
+            return;
+        }
+
+        // Update username
+        updateUsername();
+    };
+    
+    const updateUsername = async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
@@ -205,6 +242,17 @@ export default function Profile (){
                     >
                         <Text style={styles.editButtonText}>Edit Profile</Text>
                     </TouchableOpacity>
+                    {userStats.is_admin && (
+                        <TouchableOpacity 
+                            style={styles.adminButton}
+                            onPress={() => {
+                                setAdminDashboardVisible(true);
+                                hapticFeedback.select();
+                            }}
+                        >
+                            <Text style={styles.adminButtonText}>Admin</Text>
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity 
                         style={styles.logoutButton}
                         onPress={() => {
@@ -255,6 +303,12 @@ export default function Profile (){
             )}
 
             <Statistics userStats={userStats} />
+            
+            {/* Admin Dashboard */}
+            <AdminFlagDashboard
+                visible={adminDashboardVisible}
+                onClose={() => setAdminDashboardVisible(false)}
+            />
         </View>
     );
 };
@@ -287,6 +341,12 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         borderRadius: 8,
     },
+    adminButton: {
+        backgroundColor: '#FF6B35',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
     logoutButton: {
         backgroundColor: '#dc3545',
         paddingHorizontal: 16,
@@ -299,6 +359,11 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     editButtonText: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    adminButtonText: {
         color: 'white',
         fontSize: 14,
         fontWeight: '600',
