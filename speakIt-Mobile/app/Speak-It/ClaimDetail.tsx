@@ -24,6 +24,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { hapticFeedback } from '@/lib/haptics';
 import { validateUserContent } from '@/lib/contentModeration';
 import FlagContent from '@/components/FlagContent';
+import { sendNewCommentNotification } from '@/lib/notificationHelpers';
 import BlockUser from '@/components/BlockUser';
 
 interface Comment {
@@ -548,6 +549,22 @@ export default function ClaimDetail() {
             
             // Refresh comments immediately
             await fetchComments();
+            
+            // Send notification to claim creator
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    await sendNewCommentNotification(
+                        claimId,
+                        comment.id,
+                        user.email || 'Anonymous',
+                        claim?.title || 'Untitled Claim'
+                    );
+                }
+            } catch (notificationError) {
+                console.error('Error sending notification:', notificationError);
+                // Don't show error to user, notification failure shouldn't break comment submission
+            }
             
             // Show success message
             Alert.alert('Success', 'Comment posted successfully!');

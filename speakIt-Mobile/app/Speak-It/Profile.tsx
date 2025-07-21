@@ -14,6 +14,8 @@ import { hapticFeedback } from "@/lib/haptics";
 import { validateUserContent } from "@/lib/contentModeration";
 import AdminFlagDashboard from "@/components/AdminFlagDashboard";
 import DeleteAccountModal from "@/components/DeleteAccountModal";
+import { notificationService } from "@/lib/notificationService";
+import NotificationSettings from "@/components/NotificationSettings";
 import { Ionicons } from '@expo/vector-icons';
 
 interface UserStats {
@@ -38,6 +40,7 @@ export default function Profile (){
     const [newUsername, setNewUsername] = useState('');
     const [adminDashboardVisible, setAdminDashboardVisible] = useState(false);
     const [deleteAccountVisible, setDeleteAccountVisible] = useState(false);
+    const [notificationSettingsVisible, setNotificationSettingsVisible] = useState(false);
 
     useEffect(() => {
         fetchUserStats();
@@ -207,6 +210,9 @@ export default function Profile (){
                         hapticFeedback.modal();
 
                         try {
+                            // Remove notification token before logout
+                            await notificationService.removeTokenFromDatabase();
+                            
                             const { error } = await supabase.auth.signOut();
                             if (error) throw error;
                             router.replace('/');
@@ -329,6 +335,22 @@ export default function Profile (){
 
                 <Statistics userStats={userStats} />
                 
+                {/* Notification Settings */}
+                <View style={styles.settingsSection}>
+                    <Text style={styles.settingsSectionTitle}>Settings</Text>
+                    <TouchableOpacity 
+                        style={styles.settingsButton}
+                        onPress={() => {
+                            setNotificationSettingsVisible(true);
+                            hapticFeedback.select();
+                        }}
+                    >
+                        <Ionicons name="notifications-outline" size={20} color="#007AFF" />
+                        <Text style={styles.settingsButtonText}>Notification Settings</Text>
+                        <Ionicons name="chevron-forward" size={20} color="#666" />
+                    </TouchableOpacity>
+                </View>
+                
                 {/* Danger Zone */}
                 <View style={styles.dangerZone}>
                     <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
@@ -356,6 +378,12 @@ export default function Profile (){
                 visible={deleteAccountVisible}
                 onClose={() => setDeleteAccountVisible(false)}
                 onAccountDeleted={handleAccountDeleted}
+            />
+            
+            {/* Notification Settings Modal */}
+            <NotificationSettings
+                visible={notificationSettingsVisible}
+                onClose={() => setNotificationSettingsVisible(false)}
             />
         </View>
     );
@@ -510,5 +538,40 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 16,
         fontWeight: '600',
+    },
+    settingsSection: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    settingsSectionTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1a1a1a',
+        marginBottom: 12,
+    },
+    settingsButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 8,
+    },
+    settingsButtonText: {
+        color: '#1a1a1a',
+        fontSize: 16,
+        fontWeight: '500',
+        flex: 1,
+        marginLeft: 12,
     },
 });
