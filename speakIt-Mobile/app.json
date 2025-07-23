@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.speakitmobile.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["remote-notification"]
@@ -27,6 +27,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.speakitmobile.app",
+      "versionCode": 4,
       "intentFilters": [
         {
           "action": "VIEW",
