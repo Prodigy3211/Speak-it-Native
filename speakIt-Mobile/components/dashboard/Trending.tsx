@@ -199,10 +199,10 @@ export default function Trending(){
                             e.stopPropagation();
                             hapticFeedback.share();
                             try {
-                                const deepLink = `speakitmobile://claim/${item.id}`;
+                                const deepLink = `https://speak-it-three.vercel.app/claim/${item.id}`;
                                 const appStoreLink = Platform.OS === 'ios' 
                                     ? 'https://apps.apple.com/app/speakitmobile' // Replace with actual App Store link
-                                    : 'https://play.google.com/store/apps/details?id=com.speakitmobile'; // Replace with actual Play Store link
+                                    : 'https://play.google.com/store/apps/details?id=com.speakitmobile.app'; // Replace with actual Play Store link
                                 
                                 const shareMessage = `Check out this trending claim: "${item.title}"\n\n${item.claim}\n\nOpen in SpeakIt: ${deepLink}\n\nDon't have the app? Download it here: ${appStoreLink}`;
                                 

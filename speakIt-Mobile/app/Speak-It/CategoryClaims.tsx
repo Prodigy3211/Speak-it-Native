@@ -218,10 +218,10 @@ export default function CategoryClaims() {
 
     const handleShare = async (claim: Claim) => {
         try {
-            const deepLink = `speakitmobile://claim/${claim.id}`;
+            const deepLink = `https://speak-it-three.vercel.app/claim/${claim.id}`;
             const appStoreLink = Platform.OS === 'ios' 
                 ? 'https://apps.apple.com/app/speakitmobile' // Replace with actual App Store link
-                : 'https://play.google.com/store/apps/details?id=com.speakitmobile'; // Replace with actual Play Store link
+                : 'https://play.google.com/store/apps/details?id=com.speakitmobile.app'; // Replace with actual Play Store link
             
             const shareMessage = `Check out this claim: "${claim.title || 'Untitled Claim'}"\n\n${claim.claim}\n\nCategory: ${claim.category}\nby ${claim.op_username || 'Anonymous'}\n\nOpen in SpeakIt: ${deepLink}\n\nDon't have the app? Download it here: ${appStoreLink}`;
             

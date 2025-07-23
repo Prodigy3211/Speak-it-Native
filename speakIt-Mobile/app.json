@@ -15,7 +15,10 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["remote-notification"]
-      }
+      },
+      "associatedDomains": [
+        "applinks:speak-it-three.vercel.app"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +26,21 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.speakitmobile.app"
+      "package": "com.speakitmobile.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "speak-it-three.vercel.app",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",

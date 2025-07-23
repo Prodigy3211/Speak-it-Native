@@ -50,6 +50,9 @@ export default function Index() {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password: password,
+          options: {
+            emailRedirectTo: 'https://speak-it-three.vercel.app/auth/confirm',
+          }
         });
 
         if (error) throw error;
@@ -84,6 +87,41 @@ export default function Index() {
     } catch (error: any) {
       console.error("Auth error:", error);
       Alert.alert("Error", error.message || "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert("Error", "Please enter your email address first");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Send magic link for password reset with proper deep link URL
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: 'https://speak-it-three.vercel.app/reset-password',
+      });
+
+      if (error) throw error;
+
+      Alert.alert(
+        "Reset Link Sent",
+        "Check your email for a password reset link. Click the link to reset your password in the app.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              hapticFeedback.submit();
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error("Password reset error:", error);
+      Alert.alert("Error", error.message || "Failed to send reset link");
     } finally {
       setLoading(false);
     }
@@ -126,7 +164,7 @@ export default function Index() {
           {/* Auth Form */}
           <View style={styles.formSection}>
             <Text style={styles.title}>
-              {isSignUp ? "Create Account" : "Welcome Back"}
+              {isSignUp ? "Create Account" : "Login"}
             </Text>
 
             <View style={styles.inputContainer}>
@@ -168,6 +206,19 @@ export default function Index() {
                 />
               </TouchableOpacity>
             </View>
+
+            {!isSignUp && (
+              <TouchableOpacity
+                style={styles.forgotPasswordButton}
+                onPress={() => {
+                  handleForgotPassword();
+                  hapticFeedback.select();
+                }}
+                disabled={loading}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[styles.authButton, loading && styles.authButtonDisabled]}
@@ -317,6 +368,15 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 18,
     fontWeight: "600",
+  },
+  forgotPasswordButton: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  forgotPasswordText: {
+    color: "#007AFF",
+    fontSize: 14,
+    fontWeight: "500",
   },
   switchButton: {
     alignItems: "center",
