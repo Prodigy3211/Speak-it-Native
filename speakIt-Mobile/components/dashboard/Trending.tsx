@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
-import {View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Share, Platform} from 'react-native';
-import { supabase } from "@/lib/supabase";
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { getCommentsExcludingBlocked } from '@/lib/blockingService';
 import { hapticFeedback } from '@/lib/haptics';
+import { supabase } from "@/lib/supabase";
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Claim {
     id: string;
@@ -66,19 +67,11 @@ export default function Trending(){
     const getCommentsWithReplies = async (claimId: string): Promise<Comment[]> => {
         try {
             // Get all comments for this claim (excluding blocked users)
-            const { data: allComments, error: allCommentsError } = await supabase
-                .rpc('get_comments_excluding_blocked', {
-                    claim_id_param: claimId
-                });
-
-            if (allCommentsError) {
-                console.error('Error fetching comments for claim', claimId, ':', allCommentsError);
-                return [];
-            }
+            const allComments = await getCommentsExcludingBlocked(claimId);
 
             // Check for orphaned comments (comments with parent_comment_id that don't exist)
-            const validParentIds = new Set(allComments?.map(c => c.id) || []);
-            const orphanedComments = allComments?.filter(comment => 
+            const validParentIds = new Set(allComments?.map((c: any) => c.id) || []);
+            const orphanedComments = allComments?.filter((comment: any) => 
                 comment.parent_comment_id && !validParentIds.has(comment.parent_comment_id)
             ) || [];
             
@@ -86,7 +79,7 @@ export default function Trending(){
             
             if (orphanedComments.length > 0) {
                 // Convert orphaned comments to top-level comments for display
-                const fixedOrphanedComments = orphanedComments.map(comment => ({
+                const fixedOrphanedComments = orphanedComments.map((comment: any) => ({
                     ...comment,
                     parent_comment_id: null
                 }));
@@ -96,14 +89,14 @@ export default function Trending(){
             }
 
             // Get top-level comments (parent_comment_id is null)
-            const topLevelComments = commentsData?.filter(comment => 
+            const topLevelComments = commentsData?.filter((comment: any) => 
                 comment.parent_comment_id === null
             ) || [];
 
             // If we have comments but no top-level comments, there might be a schema issue
             if (commentsData && commentsData.length > 0 && topLevelComments.length === 0) {
                 // TEMPORARY FALLBACK: Show all comments as top-level if schema is broken
-                return commentsData.map(comment => ({
+                return commentsData.map((comment: any) => ({
                     ...comment,
                     parent_comment_id: null,
                     replies: []
@@ -113,8 +106,8 @@ export default function Trending(){
             // Build the nested structure
             const buildNestedComments = (parentId: string | null): Comment[] => {
                 return commentsData
-                    ?.filter(comment => comment.parent_comment_id === parentId)
-                    .map(comment => ({
+                    ?.filter((comment: any) => comment.parent_comment_id === parentId)
+                    .map((comment: any) => ({
                         ...comment,
                         replies: buildNestedComments(comment.id)
                     })) || [];
@@ -132,11 +125,11 @@ export default function Trending(){
             setLoading(true);
             setError(null);
         
-            // Get all claims first (excluding blocked users)
+            // Get all claims first
             const { data: claims, error: claimsError } = await supabase
-                .rpc('get_claims_excluding_blocked', {
-                    category_param: null
-                });
+                .from('claims')
+                .select('*')
+                .order('created_at', { ascending: false });
 
             if (claimsError) {
                 throw claimsError;
@@ -199,10 +192,10 @@ export default function Trending(){
                             e.stopPropagation();
                             hapticFeedback.share();
                             try {
-                                const deepLink = `https://speak-it-three.vercel.app/claim/${item.id}`;
+                                const deepLink = `speakitmobile://claim/${item.id}`;
                                 const appStoreLink = Platform.OS === 'ios' 
-                                    ? 'https://apps.apple.com/app/speakitmobile' // Replace with actual App Store link
-                                    : 'https://play.google.com/store/apps/details?id=com.speakitmobile.app'; // Replace with actual Play Store link
+                                    ? 'https://apps.apple.com/us/app/speak-it/id6748719689' // Replace with actual App Store link
+                                    : 'https://play.google.com/store/apps/details?id=com.speakitmobile'; // Replace with actual Play Store link
                                 
                                 const shareMessage = `Check out this trending claim: "${item.title}"\n\n${item.claim}\n\nOpen in SpeakIt: ${deepLink}\n\nDon't have the app? Download it here: ${appStoreLink}`;
                                 
