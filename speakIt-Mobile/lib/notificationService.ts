@@ -1,5 +1,5 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
@@ -88,12 +88,22 @@ export class NotificationService {
       }
 
       // Check if token already exists for this user
-      const { data: existingToken } = await supabase
+      const { data: existingToken, error: selectError } = await supabase
         .from('push_tokens')
         .select('*')
         .eq('user_id', user.id)
         .eq('token', token)
         .single();
+
+      if (selectError && selectError.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error checking existing push token:', selectError);
+        // If it's a permission error, log it but don't fail
+        if (selectError.code === '42501') {
+          console.warn('Permission denied for push_tokens table - push notifications may not work');
+          return;
+        }
+        return;
+      }
 
       if (!existingToken) {
         // Insert new token
@@ -107,6 +117,11 @@ export class NotificationService {
 
         if (error) {
           console.error('Error saving push token:', error);
+          // If it's a permission error, log it but don't fail
+          if (error.code === '42501') {
+            console.warn('Permission denied for push_tokens table - push notifications may not work');
+            return;
+          }
         } else {
           console.log('Push token saved successfully');
         }
@@ -246,6 +261,11 @@ export class NotificationService {
 
       if (error) {
         console.error('Error removing push token:', error);
+        // If it's a permission error, log it but don't fail
+        if (error.code === '42501') {
+          console.warn('Permission denied for push_tokens table - token removal failed');
+          return;
+        }
       } else {
         console.log('Push token removed successfully');
         this.expoPushToken = null;
