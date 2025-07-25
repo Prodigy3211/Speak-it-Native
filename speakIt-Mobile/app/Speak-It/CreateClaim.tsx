@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import { CATEGORIES } from '@/lib/constants';
 import { hapticFeedback } from '@/lib/haptics';
 import { validateUserContent } from '@/lib/contentModeration';
+import { sendNewClaimClientNotification } from '@/lib/notificationHelpers';
 
 const categories = CATEGORIES;
 
@@ -106,7 +107,7 @@ export default function CreateClaim() {
                 return;
             }
 
-            const { error } = await supabase
+            const { data: newClaim, error } = await supabase
                 .from('claims')
                 .insert({
                     title: title.trim(),
@@ -116,10 +117,24 @@ export default function CreateClaim() {
                     op_id: user.id,
                     up_votes: 0,
                     down_votes: 0
-                });
+                })
+                .select()
+                .single();
 
             if (error) {
                 throw error;
+            }
+
+            // Send notification to self about claim creation
+            try {
+                await sendNewClaimClientNotification(
+                    newClaim.id,
+                    newClaim.title,
+                    newClaim.category
+                );
+            } catch (notificationError) {
+                console.error('Error sending claim creation notification:', notificationError);
+                // Don't show error to user, notification failure shouldn't break claim creation
             }
 
             Alert.alert(

@@ -3,7 +3,10 @@ import FlagContent from '@/components/FlagContent';
 import { validateUserContent } from '@/lib/contentModeration';
 import { generateSmartLink } from '@/lib/deepLinks';
 import { hapticFeedback } from '@/lib/haptics';
-import { sendNewCommentNotification } from '@/lib/notificationHelpers';
+import { 
+    sendCommentClientNotification,
+    sendReplyClientNotification
+} from '@/lib/notificationHelpers';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -929,12 +932,12 @@ export default function ClaimDetail() {
             // Send notification to claim creator
             try {
                 const { data: { user } } = await supabase.auth.getUser();
-                if (user) {
-                    await sendNewCommentNotification(
+                if (user && claim) {
+                    await sendCommentClientNotification(
                         claimId,
-                        comment.id,
-                        user.email || 'Anonymous',
-                        claim?.title || 'Untitled Claim'
+                        claim.title,
+                        claim.op_id,
+                        user.email || 'Anonymous'
                     );
                 }
             } catch (notificationError) {
@@ -1037,6 +1040,32 @@ export default function ClaimDetail() {
             
             // Refresh comments immediately
             await fetchComments();
+            
+            // Send notification to parent comment owner
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user && claim) {
+                    // Get parent comment to find the owner
+                    const { data: parentComment } = await supabase
+                        .from('comments')
+                        .select('user_id')
+                        .eq('id', parentCommentId)
+                        .single();
+
+                    if (parentComment && parentComment.user_id !== user.id) {
+                        await sendReplyClientNotification(
+                            claimId,
+                            claim.title,
+                            parentCommentId,
+                            parentComment.user_id,
+                            user.email || 'Anonymous'
+                        );
+                    }
+                }
+            } catch (notificationError) {
+                console.error('Error sending reply notification:', notificationError);
+                // Don't show error to user, notification failure shouldn't break reply submission
+            }
             
             // Show success message
             Alert.alert('Success', 'Reply posted successfully!');
