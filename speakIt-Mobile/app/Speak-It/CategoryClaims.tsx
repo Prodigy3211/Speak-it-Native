@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import FlagContent from '@/components/FlagContent';
+import { hapticFeedback } from '@/lib/haptics';
+import { supabase } from '@/lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-    View,
-    Text,
-    StyleSheet,
-    FlatList,
-    TouchableOpacity,
     ActivityIndicator,
+    FlatList,
+    Platform,
     RefreshControl,
     Share,
-    Platform
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { supabase } from '@/lib/supabase';
-import { useLocalSearchParams, router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { hapticFeedback } from '@/lib/haptics';
-import FlagContent from '@/components/FlagContent';
 
 interface Claim {
     id: string;
@@ -149,11 +149,12 @@ export default function CategoryClaims() {
             setLoading(true);
             setError(null);
 
-            // Get claims for the specific category (case-insensitive) excluding blocked users
+            // Get claims for the specific category (case-insensitive)
             const { data: categoryClaims, error: claimsError } = await supabase
-                .rpc('get_claims_excluding_blocked', {
-                    category_param: category
-                });
+                .from('claims')
+                .select('*')
+                .eq('category', category)
+                .order('created_at', { ascending: false });
 
             if (claimsError) {
                 throw claimsError;

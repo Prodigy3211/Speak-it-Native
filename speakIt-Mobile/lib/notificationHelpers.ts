@@ -46,16 +46,60 @@ export const sendNotification = async (
 };
 
 /**
- * Send notification for new comment
+ * Send notification via Edge Function directly from app
+ * This bypasses the database HTTP limitation
  */
-export const sendNewCommentNotification = async (
+export async function sendNotificationViaEdgeFunction(
+  userId: string,
+  title: string,
+  body: string,
+  data?: any
+): Promise<boolean> {
+  try {
+    console.log('Sending notification via Edge Function for user:', userId);
+    
+    const response = await fetch('https://qdpammoeepwgapqyfrrh.supabase.co/functions/v1/send-notification', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        userId,
+        title,
+        body,
+        data,
+        sound: 'default'
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Edge Function error:', errorText);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log('Notification sent successfully:', result);
+    return true;
+  } catch (error) {
+    console.error('Error sending notification via Edge Function:', error);
+    return false;
+  }
+}
+
+/**
+ * Send notification for new comment
+ * This is called directly from the app when a comment is created
+ */
+export async function sendNewCommentNotification(
   claimId: string,
   commentId: string,
-  commenterUsername: string,
+  commenterEmail: string,
   claimTitle: string
-) => {
+): Promise<void> {
   try {
-    // Get claim creator's user ID
+    // Get the claim creator's ID
     const { data: claim, error: claimError } = await supabase
       .from('claims')
       .select('op_id')
@@ -64,31 +108,31 @@ export const sendNewCommentNotification = async (
 
     if (claimError || !claim) {
       console.error('Error fetching claim:', claimError);
-      return { success: false, error: 'Claim not found' };
+      return;
     }
 
     // Don't notify if commenter is the claim creator
     const { data: { user } } = await supabase.auth.getUser();
     if (user && user.id === claim.op_id) {
-      return { success: true, skipped: true };
+      console.log('Commenter is claim creator, skipping notification');
+      return;
     }
 
-    return await sendNotification(
+    // Send notification to claim creator
+    await sendNotificationViaEdgeFunction(
       claim.op_id,
       'New Comment',
-      `${commenterUsername} commented on your claim`,
+      'Someone commented on your claim',
       {
         type: 'new_comment',
         claim_id: claimId,
-        comment_id: commentId,
-        claim_title: claimTitle,
+        comment_id: commentId
       }
     );
   } catch (error) {
     console.error('Error sending new comment notification:', error);
-    return { success: false, error };
   }
-};
+}
 
 /**
  * Send notification for new claim in category

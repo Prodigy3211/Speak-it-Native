@@ -65,8 +65,28 @@ export const handleDeepLink = async (url: string): Promise<void> => {
       }
     }
     
+    else if (path.startsWith('/category/') && path.includes('/thread/')) {
+      // Web app format: /category/{category}/thread/{claimId}
+      const pathParts = path.split('/');
+      const categoryIndex = pathParts.indexOf('category') + 1;
+      const threadIndex = pathParts.indexOf('thread') + 1;
+      
+      if (categoryIndex < pathParts.length && threadIndex < pathParts.length) {
+        const category = decodeURIComponent(pathParts[categoryIndex]);
+        const claimId = pathParts[threadIndex];
+        
+        // Navigate to claim detail
+        router.push({
+          pathname: '/Speak-It/ClaimDetail' as any,
+          params: { claimId }
+        });
+      } else {
+        router.push('/Speak-It/Home');
+      }
+    }
+    
     else if (path.startsWith('/claim/')) {
-      // Shared claim link
+      // Legacy mobile app format: /claim/{claimId}
       const claimId = path.split('/claim/')[1];
       if (claimId) {
         router.push({
@@ -79,7 +99,7 @@ export const handleDeepLink = async (url: string): Promise<void> => {
     }
     
     else if (path.startsWith('/category/')) {
-      // Category link
+      // Category link without thread
       const category = path.split('/category/')[1];
       if (category) {
         router.push({
@@ -113,7 +133,8 @@ export const generateDeepLink = (type: string, data?: any): string => {
   
   switch (type) {
     case 'claim':
-      return `${baseUrl}/claim/${data.claimId}`;
+      // Use the web app format for consistency
+      return `${baseUrl}/category/${encodeURIComponent(data.category)}/thread/${data.claimId}`;
     case 'category':
       return `${baseUrl}/category/${encodeURIComponent(data.category)}`;
     case 'password-reset':
@@ -125,6 +146,26 @@ export const generateDeepLink = (type: string, data?: any): string => {
   }
 };
 
+// New function to generate mobile-first deep links
+export const generateMobileDeepLink = (type: string, data?: any): string => {
+  const baseUrl = 'https://speak-it-three.vercel.app';
+  
+  switch (type) {
+    case 'claim':
+      // This will open in mobile app if installed, fallback to web
+      return `${baseUrl}/category/${encodeURIComponent(data.category)}/thread/${data.claimId}`;
+    case 'category':
+      return `${baseUrl}/category/${encodeURIComponent(data.category)}`;
+    case 'password-reset':
+      return `${baseUrl}/reset-password`;
+    case 'email-confirmation':
+      return `${baseUrl}/auth/confirm`;
+    default:
+      return baseUrl;
+  }
+};
+
+// Function to generate custom scheme links (for direct app opening)
 export const generateCustomSchemeLink = (type: string, data?: any): string => {
   const scheme = 'speakitmobile://';
   
@@ -140,4 +181,12 @@ export const generateCustomSchemeLink = (type: string, data?: any): string => {
     default:
       return scheme;
   }
+};
+
+// Smart link generator that tries mobile first, then web
+export const generateSmartLink = (type: string, data?: any): string => {
+  // For sharing, we want to use Universal Links that will:
+  // 1. Open in mobile app if installed
+  // 2. Fall back to web app if not installed
+  return generateMobileDeepLink(type, data);
 }; 

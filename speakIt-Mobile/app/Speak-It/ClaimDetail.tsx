@@ -1,31 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    TextInput,
-    Alert,
-    ActivityIndicator,
-    Image,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    Modal,
-    Share,
-    Dimensions
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { supabase } from '@/lib/supabase';
-import { useLocalSearchParams, router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { hapticFeedback } from '@/lib/haptics';
-import { validateUserContent } from '@/lib/contentModeration';
-import FlagContent from '@/components/FlagContent';
-import { sendNewCommentNotification } from '@/lib/notificationHelpers';
 import BlockUser from '@/components/BlockUser';
+import FlagContent from '@/components/FlagContent';
+import { validateUserContent } from '@/lib/contentModeration';
+import { generateSmartLink } from '@/lib/deepLinks';
+import { hapticFeedback } from '@/lib/haptics';
+import { sendNewCommentNotification } from '@/lib/notificationHelpers';
+import { supabase } from '@/lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
 
 interface Comment {
     id: string;
@@ -96,6 +98,40 @@ export default function ClaimDetail() {
         try {
             setLoading(true);
 
+            // Check authentication first
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            
+            if (authError) {
+                console.error('Authentication error:', authError);
+                // Handle authentication error gracefully
+                Alert.alert(
+                    'Authentication Error', 
+                    'Please log in again to view this content.',
+                    [
+                        {
+                            text: 'OK',
+                            onPress: () => router.push('/')
+                        }
+                    ]
+                );
+                return;
+            }
+
+            if (!user) {
+                console.log('No authenticated user found');
+                Alert.alert(
+                    'Login Required', 
+                    'Please log in to view this content.',
+                    [
+                        {
+                            text: 'OK',
+                            onPress: () => router.push('/')
+                        }
+                    ]
+                );
+                return;
+            }
+
             // Get claim details
             const { data: claimData, error: claimError } = await supabase
                 .from('claims')
@@ -103,7 +139,11 @@ export default function ClaimDetail() {
                 .eq('id', claimId)
                 .single();
 
-            if (claimError) throw claimError;
+            if (claimError) {
+                console.error('Error fetching claim:', claimError);
+                Alert.alert('Error', 'Failed to load claim');
+                return;
+            }
 
             // Get username for claim creator
             const { data: profile } = await supabase
@@ -145,6 +185,8 @@ export default function ClaimDetail() {
                 return [];
             }
 
+            console.log(`Fetching replies for comment ${parentId}, found ${replies?.length || 0} replies`);
+
             // Process each reply and get its nested replies
             const repliesWithDetails = await Promise.all(
                 (replies || []).map(async (reply) => {
@@ -154,10 +196,16 @@ export default function ClaimDetail() {
                         .eq('user_id', reply.user_id)
                         .single();
 
-                    const { data: replyImages } = await supabase
+                    const { data: replyImages, error: imagesError } = await supabase
                         .from('images')
                         .select('*')
                         .eq('comment_id', reply.id);
+
+                    if (imagesError) {
+                        console.error('Error fetching images for reply', reply.id, ':', imagesError);
+                    }
+
+                    console.log(`Reply ${reply.id} has ${replyImages?.length || 0} images:`, replyImages);
 
                     // Get user's vote on this reply
                     let replyUserVote = null;
@@ -195,13 +243,16 @@ export default function ClaimDetail() {
 
     const fetchComments = async () => {
         try {
-            // Use the blocking-aware function to get comments excluding blocked users
+            // Get all comments for this claim
             const { data: allComments, error: allCommentsError } = await supabase
-                .rpc('get_comments_excluding_blocked', {
-                    claim_id_param: claimId
-                });
+                .from('comments')
+                .select('*')
+                .eq('claim_id', claimId)
+                .order('created_at', { ascending: true });
 
             if (allCommentsError) throw allCommentsError;
+            
+            console.log(`Fetched ${allComments?.length || 0} total comments`);
             
             // Get top-level comments (parent_comment_id is null) from the filtered results
             const initialCommentsData = allComments?.filter((comment: any) => 
@@ -209,6 +260,8 @@ export default function ClaimDetail() {
             ).sort((a: any, b: any) => 
                 new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
             ) || [];
+            
+            console.log(`Found ${initialCommentsData.length} top-level comments`);
             
             // Check for orphaned comments (comments with parent_comment_id that don't exist)
             const validParentIds = new Set(allComments?.map((c: any) => c.id) || []);
@@ -282,10 +335,16 @@ export default function ClaimDetail() {
                         .eq('user_id', comment.user_id)
                         .single();
 
-                    const { data: images } = await supabase
+                    const { data: images, error: imagesError } = await supabase
                         .from('images')
                         .select('*')
                         .eq('comment_id', comment.id);
+
+                    if (imagesError) {
+                        console.error('Error fetching images for comment', comment.id, ':', imagesError);
+                    }
+
+                    console.log(`Comment ${comment.id} has ${images?.length || 0} images:`, images);
 
                     // Get user's vote on this comment
                     let userVote = null;
@@ -314,6 +373,7 @@ export default function ClaimDetail() {
                 })
             );
 
+            console.log('Final comments with details:', commentsWithDetails);
             setComments(commentsWithDetails);
         } catch (error: any) {
             console.error('Error fetching comments:', error);
@@ -412,37 +472,113 @@ export default function ClaimDetail() {
     };
 
     const pickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [4, 3],
-            quality: 0.8,
-        });
+        try {
+            console.log('Starting image picker...');
+            
+            // Request permissions first
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            console.log('Permission status:', status);
+            
+            if (status !== 'granted') {
+                Alert.alert('Permission needed', 'Please grant permission to access your photo library');
+                return;
+            }
 
-        if (!result.canceled) {
-            setSelectedImages([...selectedImages, result.assets[0].uri]);
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+                base64: false,
+            });
+
+            console.log('Image picker result:', result);
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                const selectedAsset = result.assets[0];
+                console.log('Selected image asset:', selectedAsset);
+                
+                if (selectedAsset.uri) {
+                    console.log('Adding image URI to selected images:', selectedAsset.uri);
+                    setSelectedImages([...selectedImages, selectedAsset.uri]);
+                } else {
+                    console.error('Selected asset has no URI');
+                    Alert.alert('Error', 'Selected image has no URI');
+                }
+            } else {
+                console.log('Image picker was canceled or no assets selected');
+            }
+        } catch (error: any) {
+            console.error('Error picking image:', error);
+            Alert.alert('Error', `Failed to pick image: ${error.message || 'Unknown error'}`);
         }
     };
 
     const uploadImages = async (commentId: string): Promise<string[]> => {
         const uploadedUrls: string[] = [];
 
+        // Check authentication first
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+            console.error('Authentication error during upload:', authError);
+            Alert.alert('Error', 'Please log in again to upload images');
+            return uploadedUrls;
+        }
+
         for (const imageUri of selectedImages) {
             try {
-                const fileName = `comment-${commentId}-${Date.now()}.jpg`;
+                console.log('Processing image URI:', imageUri);
                 
-                // Create a proper file object for upload
-                const response = await fetch(imageUri);
-                const blob = await response.blob();
+                // Generate a unique filename with proper extension
+                const timestamp = Date.now();
+                const randomId = Math.random().toString(36).substring(2, 15);
+                const fileName = `comment-${commentId}-${timestamp}-${randomId}.jpg`;
                 
+                // Get file info using expo-file-system
+                const fileInfo = await FileSystem.getInfoAsync(imageUri);
+                console.log('File info:', fileInfo);
+                
+                if (!fileInfo.exists) {
+                    throw new Error('Image file does not exist');
+                }
+                
+                // Read the file as base64
+                const base64Data = await FileSystem.readAsStringAsync(imageUri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                });
+                
+                console.log('Base64 data length:', base64Data.length);
+                
+                // Validate data
+                if (!base64Data || base64Data.length === 0) {
+                    throw new Error('Image file is empty');
+                }
+                
+                // FIXED: Convert base64 to Uint8Array for proper upload
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                
+                console.log('Uploading to Supabase:', { fileName, fileSize: fileInfo.size });
+                
+                // Upload to Supabase storage using Uint8Array
                 const { data, error } = await supabase.storage
                     .from('comment-images')
-                    .upload(fileName, blob, {
-                        contentType: 'image/jpeg'
+                    .upload(fileName, byteArray, {
+                        contentType: 'image/jpeg',
+                        cacheControl: '3600'
                     });
 
-                if (error) throw error;
+                if (error) {
+                    console.error('Supabase upload error:', error);
+                    throw error;
+                }
 
+                // Get the public URL
                 const { data: urlData } = supabase.storage
                     .from('comment-images')
                     .getPublicUrl(fileName);
@@ -450,18 +586,248 @@ export default function ClaimDetail() {
                 uploadedUrls.push(urlData.publicUrl);
 
                 // Save image record to database
-                await supabase
+                const { error: dbError } = await supabase
                     .from('images')
                     .insert({
                         comment_id: commentId,
-                        user_id: (await supabase.auth.getUser()).data.user?.id,
+                        user_id: user.id,
                         image_url: urlData.publicUrl,
                         file_name: fileName,
+                        file_size: fileInfo.size || 0,
                         content_type: 'image/jpeg'
                     });
 
-            } catch (error) {
+                if (dbError) {
+                    console.error('Database insert error:', dbError);
+                    throw dbError;
+                }
+
+                console.log('Image uploaded successfully:', {
+                    fileName,
+                    fileSize: fileInfo.size,
+                    contentType: 'image/jpeg',
+                    url: urlData.publicUrl
+                });
+
+            } catch (error: any) {
                 console.error('Error uploading image:', error);
+                Alert.alert('Upload Error', `Failed to upload image: ${error.message || 'Unknown error'}`);
+                // Continue with other images even if one fails
+            }
+        }
+
+        return uploadedUrls;
+    };
+
+    // Alternative upload function using FileSystem.uploadAsync (more efficient for large files)
+    const uploadImagesWithFileSystem = async (commentId: string): Promise<string[]> => {
+        const uploadedUrls: string[] = [];
+
+        // Check authentication first
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+            console.error('Authentication error during upload:', authError);
+            Alert.alert('Error', 'Please log in again to upload images');
+            return uploadedUrls;
+        }
+
+        for (const imageUri of selectedImages) {
+            try {
+                console.log('Processing image URI with FileSystem:', imageUri);
+                
+                // Generate a unique filename
+                const timestamp = Date.now();
+                const randomId = Math.random().toString(36).substring(2, 15);
+                const fileName = `comment-${commentId}-${timestamp}-${randomId}.jpg`;
+                
+                // Get file info
+                const fileInfo = await FileSystem.getInfoAsync(imageUri);
+                console.log('File info:', fileInfo);
+                
+                if (!fileInfo.exists) {
+                    throw new Error('Image file does not exist');
+                }
+                
+                // Get file size
+                const fileSize = fileInfo.size || 0;
+                console.log('File size:', fileSize);
+                
+                if (fileSize === 0) {
+                    throw new Error('Image file is empty (0 bytes)');
+                }
+                
+                // Read the file as base64 (more efficient than the previous approach)
+                const base64Data = await FileSystem.readAsStringAsync(imageUri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                });
+                
+                console.log('Base64 data length:', base64Data.length);
+                
+                // Validate data
+                if (!base64Data || base64Data.length === 0) {
+                    throw new Error('Image file is empty');
+                }
+                
+                // FIXED: Convert base64 to Uint8Array for proper upload
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                
+                console.log('Uploading to Supabase with FileSystem method:', { fileName, fileSize });
+                
+                // Upload to Supabase storage using Uint8Array
+                const { data, error } = await supabase.storage
+                    .from('comment-images')
+                    .upload(fileName, byteArray, {
+                        contentType: 'image/jpeg',
+                        cacheControl: '3600'
+                    });
+
+                if (error) {
+                    console.error('Supabase upload error:', error);
+                    throw error;
+                }
+
+                // Get the public URL
+                const { data: urlData } = supabase.storage
+                    .from('comment-images')
+                    .getPublicUrl(fileName);
+
+                uploadedUrls.push(urlData.publicUrl);
+
+                // Save image record to database
+                const { error: dbError } = await supabase
+                    .from('images')
+                    .insert({
+                        comment_id: commentId,
+                        user_id: user.id,
+                        image_url: urlData.publicUrl,
+                        file_name: fileName,
+                        file_size: fileSize,
+                        content_type: 'image/jpeg'
+                    });
+
+                if (dbError) {
+                    console.error('Database insert error:', dbError);
+                    throw dbError;
+                }
+
+                console.log('Image uploaded successfully with FileSystem:', {
+                    fileName,
+                    fileSize,
+                    url: urlData.publicUrl
+                });
+
+            } catch (error: any) {
+                console.error('Error uploading image with FileSystem:', error);
+                Alert.alert('Upload Error', `Failed to upload image: ${error.message || 'Unknown error'}`);
+                // Continue with other images even if one fails
+            }
+        }
+
+        return uploadedUrls;
+    };
+
+    const uploadReplyImages = async (commentId: string): Promise<string[]> => {
+        const uploadedUrls: string[] = [];
+
+        for (const imageUri of replyImages) {
+            try {
+                console.log('Processing reply image URI:', imageUri);
+                
+                // Generate a unique filename with proper extension
+                const timestamp = Date.now();
+                const randomId = Math.random().toString(36).substring(2, 15);
+                const fileName = `reply-${commentId}-${timestamp}-${randomId}.jpg`;
+                
+                // Get file info using expo-file-system
+                const fileInfo = await FileSystem.getInfoAsync(imageUri);
+                console.log('Reply file info:', fileInfo);
+                
+                if (!fileInfo.exists) {
+                    throw new Error('Reply image file does not exist');
+                }
+                
+                // Read the file as base64
+                const base64Data = await FileSystem.readAsStringAsync(imageUri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                });
+                
+                console.log('Reply base64 data length:', base64Data.length);
+                
+                // Validate data
+                if (!base64Data || base64Data.length === 0) {
+                    throw new Error('Reply image file is empty');
+                }
+                
+                // FIXED: Convert base64 to Uint8Array for proper upload
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                
+                console.log('Uploading reply to Supabase:', { fileName, fileSize: fileInfo.size });
+                
+                // Upload to Supabase storage using Uint8Array
+                const { data, error } = await supabase.storage
+                    .from('comment-images')
+                    .upload(fileName, byteArray, {
+                        contentType: 'image/jpeg',
+                        cacheControl: '3600'
+                    });
+
+                if (error) {
+                    console.error('Supabase upload error:', error);
+                    throw error;
+                }
+
+                // Get the public URL
+                const { data: urlData } = supabase.storage
+                    .from('comment-images')
+                    .getPublicUrl(fileName);
+
+                uploadedUrls.push(urlData.publicUrl);
+
+                // Get current user
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) {
+                    throw new Error('User not authenticated');
+                }
+
+                // Save image record to database
+                const { error: dbError } = await supabase
+                    .from('images')
+                    .insert({
+                        comment_id: commentId,
+                        user_id: user.id,
+                        image_url: urlData.publicUrl,
+                        file_name: fileName,
+                        file_size: fileInfo.size || 0,
+                        content_type: 'image/jpeg'
+                    });
+
+                if (dbError) {
+                    console.error('Database insert error:', dbError);
+                    throw dbError;
+                }
+
+                console.log('Reply image uploaded successfully:', {
+                    fileName,
+                    fileSize: fileInfo.size,
+                    contentType: 'image/jpeg',
+                    url: urlData.publicUrl
+                });
+
+            } catch (error: any) {
+                console.error('Error uploading reply image:', error);
+                Alert.alert('Upload Error', `Failed to upload reply image: ${error.message || 'Unknown error'}`);
+                // Continue with other images even if one fails
             }
         }
 
@@ -516,6 +882,10 @@ export default function ClaimDetail() {
     const submitCommentToDatabase = async () => {
         try {
             setSubmitting(true);
+            console.log('Starting comment submission...');
+            console.log('Selected images count:', selectedImages.length);
+            console.log('Selected images:', selectedImages);
+            
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
                 Alert.alert('Error', 'You must be logged in to comment');
@@ -537,9 +907,15 @@ export default function ClaimDetail() {
 
             if (error) throw error;
 
+            console.log('Comment created successfully:', comment.id);
+
             // Upload images if any
             if (selectedImages.length > 0) {
-                await uploadImages(comment.id);
+                console.log('Starting image upload for comment:', comment.id);
+                const uploadedUrls = await uploadImages(comment.id);
+                console.log('Image upload completed. URLs:', uploadedUrls);
+            } else {
+                console.log('No images to upload');
             }
 
             setNewComment('');
@@ -618,6 +994,10 @@ export default function ClaimDetail() {
     const submitReplyToDatabase = async (parentCommentId: string) => {
         try {
             setSubmitting(true);
+            console.log('Starting reply submission...');
+            console.log('Reply images count:', replyImages.length);
+            console.log('Reply images:', replyImages);
+            
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
                 Alert.alert('Error', 'You must be logged in to reply');
@@ -640,9 +1020,15 @@ export default function ClaimDetail() {
 
             if (error) throw error;
 
+            console.log('Reply created successfully:', reply.id);
+
             // Upload images if any
             if (replyImages.length > 0) {
-                await uploadImages(reply.id);
+                console.log('Starting image upload for reply:', reply.id);
+                const uploadedUrls = await uploadReplyImages(reply.id);
+                console.log('Reply image upload completed. URLs:', uploadedUrls);
+            } else {
+                console.log('No reply images to upload');
             }
 
             setReplyText('');
@@ -689,21 +1075,30 @@ export default function ClaimDetail() {
 
             {item.images.length > 0 && (
                 <View style={styles.imageContainer}>
-                    {item.images.map((image) => (
-                        <TouchableOpacity
-                            key={image.id}
-                            onPress={() => {
-                                setExpandedImage(image.image_url);
-                                hapticFeedback.select();
-                            }}
-                        >
-                            <Image
-                                source={{ uri: image.image_url }}
-                                style={styles.commentImage}
-                                resizeMode="cover"
-                            />
-                        </TouchableOpacity>
-                    ))}
+                    {item.images.map((image) => {
+                        console.log('Rendering image:', image);
+                        return (
+                            <TouchableOpacity
+                                key={image.id}
+                                onPress={() => {
+                                    setExpandedImage(image.image_url);
+                                    hapticFeedback.select();
+                                }}
+                            >
+                                <Image
+                                    source={{ uri: image.image_url }}
+                                    style={styles.commentImage}
+                                    resizeMode="cover"
+                                    onError={(error) => {
+                                        console.error('Image load error:', error.nativeEvent);
+                                    }}
+                                    onLoad={() => {
+                                        console.log('Image loaded successfully:', image.image_url);
+                                    }}
+                                />
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
             )}
 
@@ -781,15 +1176,30 @@ export default function ClaimDetail() {
                         <TouchableOpacity
                             style={styles.replyImageButton}
                             onPress={async () => {
-                                const result = await ImagePicker.launchImageLibraryAsync({
-                                    mediaTypes: ['images'],
-                                    allowsEditing: true,
-                                    aspect: [4, 3],
-                                    quality: 0.8,
-                                });
-                                if (!result.canceled) {
-                                    setReplyImages([...replyImages, result.assets[0].uri]);
-                                    hapticFeedback.upload()
+                                try {
+                                    const result = await ImagePicker.launchImageLibraryAsync({
+                                        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                        allowsEditing: true,
+                                        aspect: [4, 3],
+                                        quality: 0.8,
+                                    });
+                                    
+                                    console.log('Reply image picker result:', result);
+                                    
+                                    if (!result.canceled && result.assets && result.assets.length > 0) {
+                                        const selectedAsset = result.assets[0];
+                                        if (selectedAsset.uri) {
+                                            console.log('Adding reply image URI:', selectedAsset.uri);
+                                            setReplyImages([...replyImages, selectedAsset.uri]);
+                                            hapticFeedback.upload();
+                                        } else {
+                                            console.error('Selected reply asset has no URI');
+                                            Alert.alert('Error', 'Selected image has no URI');
+                                        }
+                                    }
+                                } catch (error: any) {
+                                    console.error('Error picking reply image:', error);
+                                    Alert.alert('Error', `Failed to pick reply image: ${error.message || 'Unknown error'}`);
                                 }
                             }}
                         >
@@ -994,16 +1404,30 @@ export default function ClaimDetail() {
                                         <TouchableOpacity
                                             style={styles.replyImageButton}
                                             onPress={async () => {
-                                                const result = await ImagePicker.launchImageLibraryAsync({
-                                                    mediaTypes: ['images'],
-                                                    allowsEditing: true,
-                                                    aspect: [4, 3],
-                                                    quality: 0.8,
-                                                });
-                                                hapticFeedback.select()
-                                                if (!result.canceled) {
-                                                    setReplyImages([...replyImages, result.assets[0].uri]);
-                                                    hapticFeedback.upload()
+                                                try {
+                                                    const result = await ImagePicker.launchImageLibraryAsync({
+                                                        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                                        allowsEditing: true,
+                                                        aspect: [4, 3],
+                                                        quality: 0.8,
+                                                    });
+                                                    
+                                                    console.log('Nested reply image picker result:', result);
+                                                    
+                                                    if (!result.canceled && result.assets && result.assets.length > 0) {
+                                                        const selectedAsset = result.assets[0];
+                                                        if (selectedAsset.uri) {
+                                                            console.log('Adding nested reply image URI:', selectedAsset.uri);
+                                                            setReplyImages([...replyImages, selectedAsset.uri]);
+                                                            hapticFeedback.upload();
+                                                        } else {
+                                                            console.error('Selected nested reply asset has no URI');
+                                                            Alert.alert('Error', 'Selected image has no URI');
+                                                        }
+                                                    }
+                                                } catch (error: any) {
+                                                    console.error('Error picking nested reply image:', error);
+                                                    Alert.alert('Error', `Failed to pick nested reply image: ${error.message || 'Unknown error'}`);
                                                 }
                                             }}
                                         >
@@ -1018,214 +1442,7 @@ export default function ClaimDetail() {
                                                     <Image source={{ uri }} style={styles.replyPreviewImage} />
                                                     <TouchableOpacity
                                                         style={styles.replyRemoveImage}
-                                                        onPress={() => {
-                                                            setReplyImages(replyImages.filter((_, i) => i !== index));
-                                                            hapticFeedback.select()
-                                                        }}
-                                                    >
-                                                        <Ionicons name="close-circle" size={16} color="#dc3545" />
-                                                    </TouchableOpacity>
-                                                </View>
-                                            ))}
-                                        </View>
-                                    )}
-
-                                    <View style={styles.replyActions}>
-                                        <TouchableOpacity
-                                            style={styles.cancelButton}
-                                            onPress={() => {
-                                                setReplyingTo(null);
-                                                setReplyText('');
-                                                setReplyImages([]);
-                                                hapticFeedback.select()
-                                            }}
-                                        >
-                                            <Text style={styles.cancelButtonText}>Cancel</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.submitReplyButton, 
-                                                ((!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting) && styles.disabledButton
-                                            ]}
-                                            onPress={() => {
-                                                submitReply(reply.id);
-                                                hapticFeedback.submit()
-                                            }}
-                                            disabled={(!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting}
-                                        >
-                                            {submitting ? (
-                                                <ActivityIndicator color="white" size="small" />
-                                            ) : (
-                                                <Text style={styles.submitReplyButtonText}>Reply</Text>
-                                            )}
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                            )}
-
-                            {/* Render nested replies (replies to replies) */}
-                            {reply.replies && reply.replies.length > 0 && (
-                                <View style={styles.nestedRepliesContainer}>
-                                    {reply.replies.map((nestedReply) => (
-                                        <View key={nestedReply.id} style={[
-                                            styles.nestedReplyCard,
-                                            { backgroundColor: nestedReply.affirmative ? '#f0f8ff' : '#fffaf0' }
-                                        ]}>
-                                            <View style={styles.nestedReplyHeader}>
-                                                <View style={styles.nestedReplyHeaderLeft}>
-                                                    <Text style={styles.nestedReplyAuthor}>{nestedReply.username}</Text>
-                                                    <View style={[
-                                                        styles.stanceBadge,
-                                                        { backgroundColor: nestedReply.affirmative ? '#28a745' : '#dc3545' }
-                                                    ]}>
-                                                        <Text style={styles.stanceText}>
-                                                            {nestedReply.affirmative ? '👍 For' : '👎 Against'}
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                                <Text style={styles.nestedReplyDate}>
-                                                    {new Date(nestedReply.created_at).toLocaleDateString()}
-                                                </Text>
-                                            </View>
-                                            <Text style={styles.nestedReplyContent}>{nestedReply.content}</Text>
-                                            
-                                            {nestedReply.images && nestedReply.images.length > 0 && (
-                                                <View style={styles.nestedReplyImageContainer}>
-                                                    {nestedReply.images.map((image) => (
-                                                        <TouchableOpacity
-                                                            key={image.id}
-                                                            onPress={() => {
-                                                                setExpandedImage(image.image_url);
-                                                                hapticFeedback.select();
-                                                            }}
-                                                        >
-                                                            <Image
-                                                                source={{ uri: image.image_url }}
-                                                                style={styles.nestedReplyImage}
-                                                                resizeMode="cover"
-                                                            />
-                                                        </TouchableOpacity>
-                                                    ))}
-                                                </View>
-                                            )}
-                                            
-                                            <View style={styles.nestedReplyActions}>
-                                                <View style={styles.voteButtons}>
-                                                    <TouchableOpacity
-                                                        style={styles.voteButton}
-                                                        onPress={() => {
-                                                            handleVoteComment(nestedReply.id, 'up');
-                                                            hapticFeedback.vote()
-                                                        }}
-                                                    >
-                                                        <Ionicons name="arrow-up" size={12} color="#666" />
-                                                        <Text style={styles.voteText}>{nestedReply.up_votes || 0}</Text>
-                                                    </TouchableOpacity>
-                                                    <TouchableOpacity
-                                                        style={styles.voteButton}
-                                                        onPress={() => {
-                                                            handleVoteComment(nestedReply.id, 'down');
-                                                            hapticFeedback.vote()
-                                                        }}
-                                                    >
-                                                        <Ionicons name="arrow-down" size={12} color="#666" />
-                                                        <Text style={styles.voteText}>{nestedReply.down_votes || 0}</Text>
-                                                    </TouchableOpacity>
-                                                </View>
-                                                <TouchableOpacity
-                                                    style={styles.replyButton}
-                                                    onPress={() => {
-                                                        setReplyingTo(nestedReply.id);
-                                                        hapticFeedback.select()
-                                                    }}
-                                                >
-                                                    <Text style={styles.replyButtonText}>Reply</Text>
-                                                </TouchableOpacity>
-                                            </View>
-
-                                            {/* Reply input for nested replies */}
-                                            {replyingTo === nestedReply.id && (
-                                                <View style={styles.replyInput}>
-                                                    {/* Affirmative Selection for Nested Replies */}
-                                                    <View style={styles.affirmativeContainer}>
-                                                        <Text style={styles.affirmativeLabel}>Your stance:</Text>
-                                                        <View style={styles.affirmativeButtons}>
-                                                            <TouchableOpacity
-                                                                style={[
-                                                                    styles.affirmativeButton,
-                                                                    isAffirmative === true && styles.affirmativeButtonSelected
-                                                                ]}
-                                                                onPress={() => {
-                                                                    setIsAffirmative(true);
-                                                                    hapticFeedback.select()
-                                                                }}
-                                                            >
-                                                                <Text style={[
-                                                                    styles.affirmativeButtonText,
-                                                                    isAffirmative === true && styles.affirmativeButtonTextSelected
-                                                                ]}>
-                                                                    👍 For
-                                                                </Text>
-                                                            </TouchableOpacity>
-                                                            <TouchableOpacity
-                                                                style={[
-                                                                    styles.affirmativeButton,
-                                                                    isAffirmative === false && styles.affirmativeButtonSelected
-                                                                ]}
-                                                                onPress={() => {
-                                                                    setIsAffirmative(false);
-                                                                    hapticFeedback.select()
-                                                                }}
-                                                            >
-                                                                <Text style={[
-                                                                    styles.affirmativeButtonText,
-                                                                    isAffirmative === false && styles.affirmativeButtonTextSelected
-                                                                ]}>
-                                                                    👎 Against
-                                                                </Text>
-                                                            </TouchableOpacity>
-                                                        </View>
-                                                    </View>
-
-                                                    <View style={styles.replyInputContainer}>
-                                                        <TextInput
-                                                            style={styles.replyTextInput}
-                                                            value={replyText}
-                                                            onChangeText={setReplyText}
-                                                            placeholder="Write a reply..."
-                                                            placeholderTextColor="#999"
-                                                            multiline
-                                                            maxLength={500}
-                                                            textAlignVertical="top"
-                                                        />
-                                                        <TouchableOpacity
-                                                            style={styles.replyImageButton}
-                                                            onPress={async () => {
-                                                                const result = await ImagePicker.launchImageLibraryAsync({
-                                                                    mediaTypes: ['images'],
-                                                                    allowsEditing: true,
-                                                                    aspect: [4, 3],
-                                                                    quality: 0.8,
-                                                                });
-                                                                hapticFeedback.upload()
-                                                                if (!result.canceled) {
-                                                                    setReplyImages([...replyImages, result.assets[0].uri]);
-                                                                    hapticFeedback.upload()
-                                                                }
-                                                            }}
-                                                        >
-                                                            <Ionicons name="image" size={20} color="#007AFF" />
-                                                        </TouchableOpacity>
-                                                    </View>
-
-                                                    {replyImages.length > 0 && (
-                                                        <View style={styles.replySelectedImages}>
-                                                            {replyImages.map((uri, index) => (
-                                                                <View key={index} style={styles.replyImagePreview}>
-                                                                    <Image source={{ uri }} style={styles.replyPreviewImage} />
-                                                                    <TouchableOpacity
-                                                                        style={styles.replyRemoveImage}
-                                                                        onPress={() => {setReplyImages(replyImages.filter((_, i) => i !== index));
+                                                        onPress={() => {setReplyImages(replyImages.filter((_, i) => i !== index));
                                                                             hapticFeedback.select()
                                                                         }}
                                                                     >
@@ -1254,7 +1471,7 @@ export default function ClaimDetail() {
                                                                 ((!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting) && styles.disabledButton
                                                             ]}
                                                             onPress={() => {
-                                                                submitReply(nestedReply.id);
+                                                                submitReply(reply.id);
                                                                 hapticFeedback.submit()
                                                             }}
                                                             disabled={(!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting}
@@ -1268,16 +1485,236 @@ export default function ClaimDetail() {
                                                     </View>
                                                 </View>
                                             )}
+
+                                            {/* Render nested replies (replies to replies) */}
+                                            {reply.replies && reply.replies.length > 0 && (
+                                                <View style={styles.nestedRepliesContainer}>
+                                                    {reply.replies.map((nestedReply) => (
+                                                        <View key={nestedReply.id} style={[
+                                                            styles.nestedReplyCard,
+                                                            { backgroundColor: nestedReply.affirmative ? '#f0f8ff' : '#fffaf0' }
+                                                        ]}>
+                                                            <View style={styles.nestedReplyHeader}>
+                                                                <View style={styles.nestedReplyHeaderLeft}>
+                                                                    <Text style={styles.nestedReplyAuthor}>{nestedReply.username}</Text>
+                                                                    <View style={[
+                                                                        styles.stanceBadge,
+                                                                        { backgroundColor: nestedReply.affirmative ? '#28a745' : '#dc3545' }
+                                                                    ]}>
+                                                                        <Text style={styles.stanceText}>
+                                                                            {nestedReply.affirmative ? '👍 For' : '👎 Against'}
+                                                                        </Text>
+                                                                    </View>
+                                                                </View>
+                                                                <Text style={styles.nestedReplyDate}>
+                                                                    {new Date(nestedReply.created_at).toLocaleDateString()}
+                                                                </Text>
+                                                            </View>
+                                                            <Text style={styles.nestedReplyContent}>{nestedReply.content}</Text>
+                                                            
+                                                            {nestedReply.images && nestedReply.images.length > 0 && (
+                                                                <View style={styles.nestedReplyImageContainer}>
+                                                                    {nestedReply.images.map((image) => (
+                                                                        <TouchableOpacity
+                                                                            key={image.id}
+                                                                            onPress={() => {
+                                                                                setExpandedImage(image.image_url);
+                                                                                hapticFeedback.select();
+                                                                            }}
+                                                                        >
+                                                                            <Image
+                                                                                source={{ uri: image.image_url }}
+                                                                                style={styles.nestedReplyImage}
+                                                                                resizeMode="cover"
+                                                                            />
+                                                                        </TouchableOpacity>
+                                                                    ))}
+                                                                </View>
+                                                            )}
+                                                            
+                                                            <View style={styles.nestedReplyActions}>
+                                                                <View style={styles.voteButtons}>
+                                                                    <TouchableOpacity
+                                                                        style={styles.voteButton}
+                                                                        onPress={() => {
+                                                                            handleVoteComment(nestedReply.id, 'up');
+                                                                            hapticFeedback.vote()
+                                                                        }}
+                                                                    >
+                                                                        <Ionicons name="arrow-up" size={12} color="#666" />
+                                                                        <Text style={styles.voteText}>{nestedReply.up_votes || 0}</Text>
+                                                                    </TouchableOpacity>
+                                                                    <TouchableOpacity
+                                                                        style={styles.voteButton}
+                                                                        onPress={() => {
+                                                                            handleVoteComment(nestedReply.id, 'down');
+                                                                            hapticFeedback.vote()
+                                                                        }}
+                                                                    >
+                                                                        <Ionicons name="arrow-down" size={12} color="#666" />
+                                                                        <Text style={styles.voteText}>{nestedReply.down_votes || 0}</Text>
+                                                                    </TouchableOpacity>
+                                                                </View>
+                                                                <TouchableOpacity
+                                                                    style={styles.replyButton}
+                                                                    onPress={() => {
+                                                                        setReplyingTo(nestedReply.id);
+                                                                        hapticFeedback.select()
+                                                                    }}
+                                                                >
+                                                                    <Text style={styles.replyButtonText}>Reply</Text>
+                                                                </TouchableOpacity>
+                                                            </View>
+
+                                                            {/* Reply input for nested replies */}
+                                                            {replyingTo === nestedReply.id && (
+                                                                <View style={styles.replyInput}>
+                                                                    {/* Affirmative Selection for Nested Replies */}
+                                                                    <View style={styles.affirmativeContainer}>
+                                                                        <Text style={styles.affirmativeLabel}>Your stance:</Text>
+                                                                        <View style={styles.affirmativeButtons}>
+                                                                            <TouchableOpacity
+                                                                                style={[
+                                                                                    styles.affirmativeButton,
+                                                                                    isAffirmative === true && styles.affirmativeButtonSelected
+                                                                                ]}
+                                                                                onPress={() => {
+                                                                                    setIsAffirmative(true);
+                                                                                    hapticFeedback.select()
+                                                                                }}
+                                                                            >
+                                                                                <Text style={[
+                                                                                    styles.affirmativeButtonText,
+                                                                                    isAffirmative === true && styles.affirmativeButtonTextSelected
+                                                                                ]}>
+                                                                                    👍 For
+                                                                                </Text>
+                                                                            </TouchableOpacity>
+                                                                            <TouchableOpacity
+                                                                                style={[
+                                                                                    styles.affirmativeButton,
+                                                                                    isAffirmative === false && styles.affirmativeButtonSelected
+                                                                                ]}
+                                                                                onPress={() => {
+                                                                                    setIsAffirmative(false);
+                                                                                    hapticFeedback.select()
+                                                                                }}
+                                                                            >
+                                                                                <Text style={[
+                                                                                    styles.affirmativeButtonText,
+                                                                                    isAffirmative === false && styles.affirmativeButtonTextSelected
+                                                                                ]}>
+                                                                                    👎 Against
+                                                                                </Text>
+                                                                            </TouchableOpacity>
+                                                                        </View>
+                                                                    </View>
+
+                                                                    <View style={styles.replyInputContainer}>
+                                                                        <TextInput
+                                                                            style={styles.replyTextInput}
+                                                                            value={replyText}
+                                                                            onChangeText={setReplyText}
+                                                                            placeholder="Write a reply..."
+                                                                            placeholderTextColor="#999"
+                                                                            multiline
+                                                                            maxLength={500}
+                                                                            textAlignVertical="top"
+                                                                        />
+                                                                        <TouchableOpacity
+                                            style={styles.replyImageButton}
+                                            onPress={async () => {
+                                                try {
+                                                    const result = await ImagePicker.launchImageLibraryAsync({
+                                                        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                                        allowsEditing: true,
+                                                        aspect: [4, 3],
+                                                        quality: 0.8,
+                                                    });
+                                                    
+                                                    console.log('Deep nested reply image picker result:', result);
+                                                    
+                                                    if (!result.canceled && result.assets && result.assets.length > 0) {
+                                                        const selectedAsset = result.assets[0];
+                                                        if (selectedAsset.uri) {
+                                                            console.log('Adding deep nested reply image URI:', selectedAsset.uri);
+                                                            setReplyImages([...replyImages, selectedAsset.uri]);
+                                                            hapticFeedback.upload();
+                                                        } else {
+                                                            console.error('Selected deep nested reply asset has no URI');
+                                                            Alert.alert('Error', 'Selected image has no URI');
+                                                        }
+                                                    }
+                                                } catch (error: any) {
+                                                    console.error('Error picking deep nested reply image:', error);
+                                                    Alert.alert('Error', `Failed to pick deep nested reply image: ${error.message || 'Unknown error'}`);
+                                                }
+                                            }}
+                                        >
+                                                                            <Ionicons name="image" size={20} color="#007AFF" />
+                                                                        </TouchableOpacity>
+                                                                    </View>
+
+                                                                    {replyImages.length > 0 && (
+                                                                        <View style={styles.replySelectedImages}>
+                                                                            {replyImages.map((uri, index) => (
+                                                                                <View key={index} style={styles.replyImagePreview}>
+                                                                                    <Image source={{ uri }} style={styles.replyPreviewImage} />
+                                                                                    <TouchableOpacity
+                                                                                        style={styles.replyRemoveImage}
+                                                                                        onPress={() => {setReplyImages(replyImages.filter((_, i) => i !== index));
+                                                                                            hapticFeedback.select()
+                                                                                        }}
+                                                                                    >
+                                                                                        <Ionicons name="close-circle" size={16} color="#dc3545" />
+                                                                                    </TouchableOpacity>
+                                                                                </View>
+                                                                            ))}
+                                                                        </View>
+                                                                    )}
+
+                                                                    <View style={styles.replyActions}>
+                                                                        <TouchableOpacity
+                                                                            style={styles.cancelButton}
+                                                                            onPress={() => {
+                                                                                setReplyingTo(null);
+                                                                                setReplyText('');
+                                                                                setReplyImages([]);
+                                                                                hapticFeedback.select()
+                                                                            }}
+                                                                        >
+                                                                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                                                                        </TouchableOpacity>
+                                                                        <TouchableOpacity
+                                                                            style={[
+                                                                                styles.submitReplyButton, 
+                                                                                ((!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting) && styles.disabledButton
+                                                                            ]}
+                                                                            onPress={() => {
+                                                                                submitReply(nestedReply.id);
+                                                                                hapticFeedback.submit()
+                                                                            }}
+                                                                            disabled={(!replyText.trim() && replyImages.length === 0) || isAffirmative === null || submitting}
+                                                                        >
+                                                                            {submitting ? (
+                                                                                <ActivityIndicator color="white" size="small" />
+                                                                            ) : (
+                                                                                <Text style={styles.submitReplyButtonText}>Reply</Text>
+                                                                            )}
+                                                                        </TouchableOpacity>
+                                                                    </View>
+                                                                </View>
+                                                            )}
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            )}
                                         </View>
                                     ))}
                                 </View>
                             )}
                         </View>
-                    ))}
-                </View>
-            )}
-        </View>
-    );
+                    );
 
     if (loading) {
         return (
@@ -1317,17 +1754,20 @@ export default function ClaimDetail() {
                     onPress={async () => {
                         hapticFeedback.share();
                         try {
-                            const deepLink = `https://speak-it-three.vercel.app/claim/${claim.id}`;
+                            const deepLink = generateSmartLink('claim', { 
+                                claimId: claim.id, 
+                                category: claim.category 
+                            });
                             const appStoreLink = Platform.OS === 'ios' 
-                                ? 'https://apps.apple.com/app/speakitmobile' // Replace with actual App Store link
-                                : 'https://play.google.com/store/apps/details?id=com.speakitmobile.app'; // Replace with actual Play Store link
+                                ? 'https://apps.apple.com/us/app/speak-it/id6748719689'
+                                : 'https://play.google.com/store/apps/details?id=com.speakitmobile.app';
                             
                             const shareMessage = `Check out this claim: "${claim.title}"\n\n${claim.claim}\n\n${claim.rules ? `Discussion Rules: ${claim.rules}\n\n` : ''}Open in SpeakIt: ${deepLink}\n\nDon't have the app? Download it here: ${appStoreLink}`;
                             
                             await Share.share({
                                 message: shareMessage,
                                 title: claim.title,
-                                url: deepLink, // This will be used on platforms that support URL sharing
+                                url: deepLink,
                             });
                         } catch (error: any) {
                             console.error('Error sharing claim:', error);
@@ -1429,6 +1869,53 @@ export default function ClaimDetail() {
                         }}
                     >
                         <Ionicons name="refresh" size={20} color="#007AFF" />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                        style={styles.debugButton}
+                        onPress={async () => {
+                            console.log('=== DEBUG: Testing Image Picker ===');
+                            try {
+                                const result = await ImagePicker.launchImageLibraryAsync({
+                                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                    allowsEditing: false,
+                                    quality: 1.0,
+                                });
+                                console.log('DEBUG Image picker result:', result);
+                                if (!result.canceled && result.assets && result.assets.length > 0) {
+                                    const asset = result.assets[0];
+                                    console.log('DEBUG Selected asset:', asset);
+                                    console.log('DEBUG Asset URI:', asset.uri);
+                                    console.log('DEBUG Asset type:', asset.type);
+                                    console.log('DEBUG Asset fileSize:', asset.fileSize);
+                                    
+                                    // Test file system approach
+                                    const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+                                    console.log('DEBUG File info:', fileInfo);
+                                    
+                                    if (fileInfo.exists) {
+                                        const base64Data = await FileSystem.readAsStringAsync(asset.uri, {
+                                            encoding: FileSystem.EncodingType.Base64,
+                                        });
+                                        console.log('DEBUG Base64 data length:', base64Data.length);
+                                        
+                                        // Convert to blob
+                                        const byteCharacters = atob(base64Data);
+                                        const byteNumbers = new Array(byteCharacters.length);
+                                        for (let i = 0; i < byteCharacters.length; i++) {
+                                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                        }
+                                        const byteArray = new Uint8Array(byteNumbers);
+                                        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+                                        console.log('DEBUG Blob result:', { size: blob.size, type: blob.type });
+                                    }
+                                }
+                            } catch (error: any) {
+                                console.error('DEBUG Image picker error:', error);
+                            }
+                        }}
+                    >
+                        <Ionicons name="bug" size={20} color="#FF6B35" />
                     </TouchableOpacity>
                     
                 </View>
