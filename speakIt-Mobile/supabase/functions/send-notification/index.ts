@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 interface NotificationRequest {
-  userId: string;
+  userId?: string; // Optional when using JWT
   title: string;
   body: string;
   data?: any;
@@ -36,18 +36,34 @@ serve(async (req) => {
   }
 
   try {
-    // Validate authorization header (anon key)
+    // Get authorization header
     const authHeader = req.headers.get('authorization')
-    const expectedAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
     
-    if (!authHeader || !expectedAnonKey || !authHeader.startsWith('Bearer ') || 
-        authHeader.replace('Bearer ', '') !== expectedAnonKey) {
-      console.error('Invalid or missing authorization header')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('Missing or invalid authorization header')
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Missing authorization header' }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 401 
+        }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+    const expectedAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    
+    // Create Supabase client for JWT verification
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing environment variables')
+      return new Response(
+        JSON.stringify({ error: 'Missing environment variables' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500 
         }
       )
     }
@@ -59,10 +75,10 @@ serve(async (req) => {
     const { userId, title, body: messageBody, data, sound = 'default', badge }: NotificationRequest = body
 
     // Validate required fields
-    if (!userId || !title || !messageBody) {
-      console.error('Missing required fields:', { userId, title, messageBody })
+    if (!title || !messageBody) {
+      console.error('Missing required fields: title, body')
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: userId, title, body' }),
+        JSON.stringify({ error: 'Missing required fields: title, body' }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 400 
@@ -70,31 +86,79 @@ serve(async (req) => {
       )
     }
 
-    console.log('Processing notification for user:', userId)
+    let targetUserId = userId
 
-    // Create Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing environment variables:', { supabaseUrl: !!supabaseUrl, supabaseServiceKey: !!supabaseServiceKey })
-      return new Response(
-        JSON.stringify({ error: 'Missing environment variables' }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500 
+    // Check if token is JWT (user access token) or anon key
+    if (token === expectedAnonKey) {
+      // Using anonymous key - userId must be provided
+      if (!userId) {
+        console.error('userId required when using anonymous key')
+        return new Response(
+          JSON.stringify({ error: 'userId required when using anonymous key' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400 
+          }
+        )
+      }
+      console.log('Using anonymous key authentication for user:', userId)
+    } else {
+      // Using JWT - verify and extract user ID
+      try {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey)
+        const { data: { user }, error: jwtError } = await supabase.auth.getUser(token)
+        
+        if (jwtError || !user) {
+          console.error('Invalid JWT token:', jwtError)
+          return new Response(
+            JSON.stringify({ error: 'Invalid JWT token' }),
+            { 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 401 
+            }
+          )
         }
-      )
+
+        // Use JWT user ID if no userId provided, otherwise validate userId matches
+        if (!userId) {
+          targetUserId = user.id
+          console.log('Using JWT user ID:', targetUserId)
+        } else if (userId !== user.id) {
+          console.error('userId does not match JWT user ID')
+          return new Response(
+            JSON.stringify({ error: 'userId does not match authenticated user' }),
+            { 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 403 
+            }
+          )
+        } else {
+          targetUserId = userId
+          console.log('Using provided userId (validated against JWT):', targetUserId)
+        }
+      } catch (error) {
+        console.error('Error verifying JWT:', error)
+        return new Response(
+          JSON.stringify({ error: 'Invalid JWT token' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 401 
+          }
+        )
+      }
     }
-    
+
+    console.log('Processing notification for user:', targetUserId)
+
+    // Create Supabase client with service role key for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Get user's push tokens
-    console.log('Fetching push tokens for user:', userId)
+    console.log('Fetching push tokens for user:', targetUserId)
     const { data: tokens, error: tokenError } = await supabase
       .from('push_tokens')
       .select('token, device_type')
-      .eq('user_id', userId)
+      .eq('user_id', targetUserId)
 
     if (tokenError) {
       console.error('Error fetching push tokens:', tokenError)
@@ -110,7 +174,7 @@ serve(async (req) => {
     console.log('Found tokens:', tokens?.length || 0)
 
     if (!tokens || tokens.length === 0) {
-      console.log('No push tokens found for user:', userId)
+      console.log('No push tokens found for user:', targetUserId)
       return new Response(
         JSON.stringify({ error: 'No push tokens found for user' }),
         { 
@@ -180,7 +244,7 @@ serve(async (req) => {
     }
 
     // Log successful notifications
-    console.log(`✅ Successfully sent ${messages.length} notifications to user ${userId}`)
+    console.log(`✅ Successfully sent ${messages.length} notifications to user ${targetUserId}`)
 
     return new Response(
       JSON.stringify({ 
@@ -196,7 +260,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('❌ Error in send-notification function:', error)
+    console.error('Unexpected error:', error)
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: error.message }),
       { 
