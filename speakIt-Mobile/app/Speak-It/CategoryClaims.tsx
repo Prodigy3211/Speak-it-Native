@@ -1,6 +1,7 @@
 import FlagContent from '@/components/FlagContent';
 import { hapticFeedback } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
+import { generateSmartLink } from '@/lib/deepLinks';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -247,11 +248,14 @@ export default function CategoryClaims() {
 
   const handleShare = async (claim: Claim) => {
     try {
-      const deepLink = `https://speak-it-three.vercel.app/claim/${claim.id}`;
+      const deepLink = generateSmartLink('claim', {
+        claimId: claim.id,
+        category: claim.category,
+      });
       const appStoreLink =
         Platform.OS === 'ios'
-          ? 'https://apps.apple.com/us/app/speak-it/id6748719689' // Replace with actual App Store link
-          : 'https://play.google.com/store/apps/details?id=com.speakitmobile.app'; // Replace with actual Play Store link
+          ? 'https://apps.apple.com/us/app/speak-it/id6748719689'
+          : 'https://play.google.com/store/apps/details?id=com.speakitmobile.app';
 
       const shareMessage = `Check out this claim: "${
         claim.title || 'Untitled Claim'
