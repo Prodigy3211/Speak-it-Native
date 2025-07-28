@@ -124,7 +124,6 @@ export default function ClaimDetail() {
       }
 
       if (!user) {
-        console.log('No authenticated user found');
         Alert.alert('Login Required', 'Please log in to view this content.', [
           {
             text: 'OK',
@@ -195,12 +194,6 @@ export default function ClaimDetail() {
         return [];
       }
 
-      console.log(
-        `Fetching replies for comment ${parentId}, found ${
-          replies?.length || 0
-        } replies`
-      );
-
       // Process each reply and get its nested replies
       const repliesWithDetails = await Promise.all(
         (replies || []).map(async (reply) => {
@@ -223,11 +216,6 @@ export default function ClaimDetail() {
               imagesError
             );
           }
-
-          console.log(
-            `Reply ${reply.id} has ${replyImages?.length || 0} images:`,
-            replyImages
-          );
 
           // Get user's vote on this reply
           let replyUserVote = null;
@@ -278,8 +266,6 @@ export default function ClaimDetail() {
 
       if (allCommentsError) throw allCommentsError;
 
-      console.log(`Fetched ${allComments?.length || 0} total comments`);
-
       // Get top-level comments (parent_comment_id is null) from the filtered results
       const initialCommentsData =
         allComments
@@ -289,8 +275,6 @@ export default function ClaimDetail() {
               new Date(b.created_at).getTime() -
               new Date(a.created_at).getTime()
           ) || [];
-
-      console.log(`Found ${initialCommentsData.length} top-level comments`);
 
       // Check for orphaned comments (comments with parent_comment_id that don't exist)
       const validParentIds = new Set(allComments?.map((c: any) => c.id) || []);
@@ -330,16 +314,8 @@ export default function ClaimDetail() {
         console.warn(
           'WARNING: Found comments but no top-level comments. This might indicate a schema issue.'
         );
-        console.log(
-          'All comments parent_comment_id values:',
-          allComments.map((c: any) => ({
-            id: c.id,
-            parent_id: c.parent_comment_id,
-          }))
-        );
 
         // TEMPORARY FALLBACK: Show all comments as top-level if schema is broken
-        console.log('Using fallback: showing all comments as top-level');
         const fallbackComments = allComments.map((comment: any) => ({
           ...comment,
           parent_comment_id: null, // Force all to be top-level
@@ -400,11 +376,6 @@ export default function ClaimDetail() {
             );
           }
 
-          console.log(
-            `Comment ${comment.id} has ${images?.length || 0} images:`,
-            images
-          );
-
           // Get user's vote on this comment
           let userVote = null;
           if (user) {
@@ -436,7 +407,6 @@ export default function ClaimDetail() {
         })
       );
 
-      console.log('Final comments with details:', commentsWithDetails);
       setComments(commentsWithDetails);
     } catch (error: any) {
       console.error('Error fetching comments:', error);
@@ -542,12 +512,9 @@ export default function ClaimDetail() {
 
   const pickImage = async () => {
     try {
-      console.log('Starting image picker...');
-
       // Request permissions first
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log('Permission status:', status);
 
       if (status !== 'granted') {
         Alert.alert(
@@ -565,24 +532,15 @@ export default function ClaimDetail() {
         base64: false,
       });
 
-      console.log('Image picker result:', result);
-
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selectedAsset = result.assets[0];
-        console.log('Selected image asset:', selectedAsset);
 
         if (selectedAsset.uri) {
-          console.log(
-            'Adding image URI to selected images:',
-            selectedAsset.uri
-          );
           setSelectedImages([...selectedImages, selectedAsset.uri]);
         } else {
           console.error('Selected asset has no URI');
           Alert.alert('Error', 'Selected image has no URI');
         }
-      } else {
-        console.log('Image picker was canceled or no assets selected');
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
@@ -610,8 +568,6 @@ export default function ClaimDetail() {
 
     for (const imageUri of selectedImages) {
       try {
-        console.log('Processing image URI:', imageUri);
-
         // Generate a unique filename with proper extension
         const timestamp = Date.now();
         const randomId = Math.random().toString(36).substring(2, 15);
@@ -619,7 +575,6 @@ export default function ClaimDetail() {
 
         // Get file info using expo-file-system
         const fileInfo = await FileSystem.getInfoAsync(imageUri);
-        console.log('File info:', fileInfo);
 
         if (!fileInfo.exists) {
           throw new Error('Image file does not exist');
@@ -629,8 +584,6 @@ export default function ClaimDetail() {
         const base64Data = await FileSystem.readAsStringAsync(imageUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
-        console.log('Base64 data length:', base64Data.length);
 
         // Validate data
         if (!base64Data || base64Data.length === 0) {
@@ -644,11 +597,6 @@ export default function ClaimDetail() {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
-
-        console.log('Uploading to Supabase:', {
-          fileName,
-          fileSize: fileInfo.size,
-        });
 
         // Upload to Supabase storage using Uint8Array
         const { data, error } = await supabase.storage
@@ -684,13 +632,6 @@ export default function ClaimDetail() {
           console.error('Database insert error:', dbError);
           throw dbError;
         }
-
-        console.log('Image uploaded successfully:', {
-          fileName,
-          fileSize: fileInfo.size,
-          contentType: 'image/jpeg',
-          url: urlData.publicUrl,
-        });
       } catch (error: any) {
         console.error('Error uploading image:', error);
         Alert.alert(
@@ -724,8 +665,6 @@ export default function ClaimDetail() {
 
     for (const imageUri of selectedImages) {
       try {
-        console.log('Processing image URI with FileSystem:', imageUri);
-
         // Generate a unique filename
         const timestamp = Date.now();
         const randomId = Math.random().toString(36).substring(2, 15);
@@ -733,7 +672,6 @@ export default function ClaimDetail() {
 
         // Get file info
         const fileInfo = await FileSystem.getInfoAsync(imageUri);
-        console.log('File info:', fileInfo);
 
         if (!fileInfo.exists) {
           throw new Error('Image file does not exist');
@@ -741,7 +679,6 @@ export default function ClaimDetail() {
 
         // Get file size
         const fileSize = fileInfo.size || 0;
-        console.log('File size:', fileSize);
 
         if (fileSize === 0) {
           throw new Error('Image file is empty (0 bytes)');
@@ -751,8 +688,6 @@ export default function ClaimDetail() {
         const base64Data = await FileSystem.readAsStringAsync(imageUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
-        console.log('Base64 data length:', base64Data.length);
 
         // Validate data
         if (!base64Data || base64Data.length === 0) {
@@ -766,11 +701,6 @@ export default function ClaimDetail() {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
-
-        console.log('Uploading to Supabase with FileSystem method:', {
-          fileName,
-          fileSize,
-        });
 
         // Upload to Supabase storage using Uint8Array
         const { data, error } = await supabase.storage
@@ -806,12 +736,6 @@ export default function ClaimDetail() {
           console.error('Database insert error:', dbError);
           throw dbError;
         }
-
-        console.log('Image uploaded successfully with FileSystem:', {
-          fileName,
-          fileSize,
-          url: urlData.publicUrl,
-        });
       } catch (error: any) {
         console.error('Error uploading image with FileSystem:', error);
         Alert.alert(
@@ -830,8 +754,6 @@ export default function ClaimDetail() {
 
     for (const imageUri of replyImages) {
       try {
-        console.log('Processing reply image URI:', imageUri);
-
         // Generate a unique filename with proper extension
         const timestamp = Date.now();
         const randomId = Math.random().toString(36).substring(2, 15);
@@ -839,7 +761,6 @@ export default function ClaimDetail() {
 
         // Get file info using expo-file-system
         const fileInfo = await FileSystem.getInfoAsync(imageUri);
-        console.log('Reply file info:', fileInfo);
 
         if (!fileInfo.exists) {
           throw new Error('Reply image file does not exist');
@@ -849,8 +770,6 @@ export default function ClaimDetail() {
         const base64Data = await FileSystem.readAsStringAsync(imageUri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
-        console.log('Reply base64 data length:', base64Data.length);
 
         // Validate data
         if (!base64Data || base64Data.length === 0) {
@@ -864,11 +783,6 @@ export default function ClaimDetail() {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
-
-        console.log('Uploading reply to Supabase:', {
-          fileName,
-          fileSize: fileInfo.size,
-        });
 
         // Upload to Supabase storage using Uint8Array
         const { data, error } = await supabase.storage
@@ -912,13 +826,6 @@ export default function ClaimDetail() {
           console.error('Database insert error:', dbError);
           throw dbError;
         }
-
-        console.log('Reply image uploaded successfully:', {
-          fileName,
-          fileSize: fileInfo.size,
-          contentType: 'image/jpeg',
-          url: urlData.publicUrl,
-        });
       } catch (error: any) {
         console.error('Error uploading reply image:', error);
         Alert.alert(
@@ -987,9 +894,6 @@ export default function ClaimDetail() {
   const submitCommentToDatabase = async () => {
     try {
       setSubmitting(true);
-      console.log('Starting comment submission...');
-      console.log('Selected images count:', selectedImages.length);
-      console.log('Selected images:', selectedImages);
 
       const {
         data: { user },
@@ -1014,15 +918,9 @@ export default function ClaimDetail() {
 
       if (error) throw error;
 
-      console.log('Comment created successfully:', comment.id);
-
       // Upload images if any
       if (selectedImages.length > 0) {
-        console.log('Starting image upload for comment:', comment.id);
         const uploadedUrls = await uploadImages(comment.id);
-        console.log('Image upload completed. URLs:', uploadedUrls);
-      } else {
-        console.log('No images to upload');
       }
 
       setNewComment('');
@@ -1106,9 +1004,6 @@ export default function ClaimDetail() {
   const submitReplyToDatabase = async (parentCommentId: string) => {
     try {
       setSubmitting(true);
-      console.log('Starting reply submission...');
-      console.log('Reply images count:', replyImages.length);
-      console.log('Reply images:', replyImages);
 
       const {
         data: { user },
@@ -1134,15 +1029,9 @@ export default function ClaimDetail() {
 
       if (error) throw error;
 
-      console.log('Reply created successfully:', reply.id);
-
       // Upload images if any
       if (replyImages.length > 0) {
-        console.log('Starting image upload for reply:', reply.id);
         const uploadedUrls = await uploadReplyImages(reply.id);
-        console.log('Reply image upload completed. URLs:', uploadedUrls);
-      } else {
-        console.log('No reply images to upload');
       }
 
       setReplyText('');
@@ -1221,7 +1110,6 @@ export default function ClaimDetail() {
       {item.images.length > 0 && (
         <View style={styles.imageContainer}>
           {item.images.map((image) => {
-            console.log('Rendering image:', image);
             return (
               <TouchableOpacity
                 key={image.id}
@@ -1236,9 +1124,6 @@ export default function ClaimDetail() {
                   resizeMode='cover'
                   onError={(error) => {
                     console.error('Image load error:', error.nativeEvent);
-                  }}
-                  onLoad={() => {
-                    console.log('Image loaded successfully:', image.image_url);
                   }}
                 />
               </TouchableOpacity>
@@ -1339,8 +1224,6 @@ export default function ClaimDetail() {
                     quality: 0.8,
                   });
 
-                  console.log('Reply image picker result:', result);
-
                   if (
                     !result.canceled &&
                     result.assets &&
@@ -1348,7 +1231,6 @@ export default function ClaimDetail() {
                   ) {
                     const selectedAsset = result.assets[0];
                     if (selectedAsset.uri) {
-                      console.log('Adding reply image URI:', selectedAsset.uri);
                       setReplyImages([...replyImages, selectedAsset.uri]);
                       hapticFeedback.upload();
                     } else {
@@ -1598,11 +1480,6 @@ export default function ClaimDetail() {
                               quality: 0.8,
                             });
 
-                          console.log(
-                            'Nested reply image picker result:',
-                            result
-                          );
-
                           if (
                             !result.canceled &&
                             result.assets &&
@@ -1610,10 +1487,6 @@ export default function ClaimDetail() {
                           ) {
                             const selectedAsset = result.assets[0];
                             if (selectedAsset.uri) {
-                              console.log(
-                                'Adding nested reply image URI:',
-                                selectedAsset.uri
-                              );
                               setReplyImages([
                                 ...replyImages,
                                 selectedAsset.uri,
@@ -1899,11 +1772,6 @@ export default function ClaimDetail() {
                                       quality: 0.8,
                                     });
 
-                                  console.log(
-                                    'Deep nested reply image picker result:',
-                                    result
-                                  );
-
                                   if (
                                     !result.canceled &&
                                     result.assets &&
@@ -1911,10 +1779,6 @@ export default function ClaimDetail() {
                                   ) {
                                     const selectedAsset = result.assets[0];
                                     if (selectedAsset.uri) {
-                                      console.log(
-                                        'Adding deep nested reply image URI:',
-                                        selectedAsset.uri
-                                      );
                                       setReplyImages([
                                         ...replyImages,
                                         selectedAsset.uri,
@@ -2210,28 +2074,21 @@ export default function ClaimDetail() {
           <TouchableOpacity
             style={styles.debugButton}
             onPress={async () => {
-              console.log('=== DEBUG: Testing Image Picker ===');
               try {
                 const result = await ImagePicker.launchImageLibraryAsync({
                   mediaTypes: ImagePicker.MediaTypeOptions.Images,
                   allowsEditing: false,
                   quality: 1.0,
                 });
-                console.log('DEBUG Image picker result:', result);
                 if (
                   !result.canceled &&
                   result.assets &&
                   result.assets.length > 0
                 ) {
                   const asset = result.assets[0];
-                  console.log('DEBUG Selected asset:', asset);
-                  console.log('DEBUG Asset URI:', asset.uri);
-                  console.log('DEBUG Asset type:', asset.type);
-                  console.log('DEBUG Asset fileSize:', asset.fileSize);
 
                   // Test file system approach
                   const fileInfo = await FileSystem.getInfoAsync(asset.uri);
-                  console.log('DEBUG File info:', fileInfo);
 
                   if (fileInfo.exists) {
                     const base64Data = await FileSystem.readAsStringAsync(
@@ -2240,7 +2097,6 @@ export default function ClaimDetail() {
                         encoding: FileSystem.EncodingType.Base64,
                       }
                     );
-                    console.log('DEBUG Base64 data length:', base64Data.length);
 
                     // Convert to blob
                     const byteCharacters = atob(base64Data);
@@ -2250,10 +2106,6 @@ export default function ClaimDetail() {
                     }
                     const byteArray = new Uint8Array(byteNumbers);
                     const blob = new Blob([byteArray], { type: 'image/jpeg' });
-                    console.log('DEBUG Blob result:', {
-                      size: blob.size,
-                      type: blob.type,
-                    });
                   }
                 }
               } catch (error: any) {
