@@ -257,160 +257,114 @@ export default function ClaimDetail() {
 
   const fetchComments = async () => {
     try {
-      // Get all comments for this claim
+      //Get user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      //Get All Comments
       const { data: allComments, error: allCommentsError } = await supabase
         .from('comments')
         .select('*')
         .eq('claim_id', claimId)
         .order('created_at', { ascending: true });
 
-      if (allCommentsError) throw allCommentsError;
+      if (allCommentsError) {
+        throw allCommentsError;
+      }
+      //Get User Ids
+      const userIds = [...new Set(allComments?.map((c) => c.user_id) || [])];
 
-      // Get top-level comments (parent_comment_id is null) from the filtered results
-      const initialCommentsData =
-        allComments
-          ?.filter((comment: any) => comment.parent_comment_id === null)
-          .sort(
-            (a: any, b: any) =>
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime()
-          ) || [];
+      //Get All Profiles
+      const { data: allProfiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id, username')
+        .in('user_id', userIds);
 
-      // Check for orphaned comments (comments with parent_comment_id that don't exist)
-      const validParentIds = new Set(allComments?.map((c: any) => c.id) || []);
-      const orphanedComments =
-        allComments?.filter(
-          (comment: any) =>
-            comment.parent_comment_id &&
-            !validParentIds.has(comment.parent_comment_id)
-        ) || [];
-
-      let commentsData = initialCommentsData;
-
-      if (orphanedComments.length > 0) {
-        // Convert orphaned comments to top-level comments for display
-        const fixedOrphanedComments = orphanedComments.map((comment: any) => ({
-          ...comment,
-          parent_comment_id: null,
-        }));
-
-        // Add orphaned comments to the top-level comments list
-        const allTopLevelComments = [
-          ...(commentsData || []),
-          ...fixedOrphanedComments,
-        ];
-        commentsData = allTopLevelComments.sort(
-          (a: any, b: any) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+      if (profilesError) {
+        console.error('Error Fetching profiles: ', profilesError);
       }
 
-      // If we have comments but no top-level comments, there might be a schema issue
-      if (
-        allComments &&
-        allComments.length > 0 &&
-        (!commentsData || commentsData.length === 0)
-      ) {
-        console.warn(
-          'WARNING: Found comments but no top-level comments. This might indicate a schema issue.'
-        );
+      //Get All Images
+      const commentIds = allComments?.map((c) => c.id) || [];
+      const { data: allImages, error: imagesError } = await supabase
+        .from('images')
+        .select('*')
+        .in('comment_id', commentIds);
 
-        // TEMPORARY FALLBACK: Show all comments as top-level if schema is broken
-        const fallbackComments = allComments.map((comment: any) => ({
-          ...comment,
-          parent_comment_id: null, // Force all to be top-level
-        }));
-        setComments(fallbackComments);
-        return;
+      if (imagesError) {
+        console.error('Error Fetching images: ', imagesError);
       }
 
       // Get all votes for comments
-      const { data: votes, error: votesError } = await supabase
+      const { data: allVotes, error: votesError } = await supabase
         .from('votes')
-        .select('comment_id, vote_type')
-        .not('comment_id', 'is', null);
+        .select('comment_id, vote_type, user_id')
+        .in('comment_id', commentIds);
 
       if (votesError) {
         throw votesError;
       }
 
-      // Calculate vote counts per comment
-      const voteCounts =
-        votes?.reduce((acc: any, vote: any) => {
-          if (!acc[vote.comment_id]) {
-            acc[vote.comment_id] = { up_votes: 0, down_votes: 0 };
-          }
-          if (vote.vote_type === 'up') {
-            acc[vote.comment_id].up_votes += 1;
-          } else if (vote.vote_type === 'down') {
-            acc[vote.comment_id].down_votes += 1;
-          }
-          return acc;
-        }, {}) || {};
-
-      // Get current user for vote checking
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      // Get usernames and images for comments
-      const commentsWithDetails = await Promise.all(
-        commentsData.map(async (comment: any) => {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('username')
-            .eq('user_id', comment.user_id)
-            .single();
-
-          const { data: images, error: imagesError } = await supabase
-            .from('images')
-            .select('*')
-            .eq('comment_id', comment.id);
-
-          if (imagesError) {
-            console.error(
-              'Error fetching images for comment',
-              comment.id,
-              ':',
-              imagesError
-            );
-          }
-
-          // Get user's vote on this comment
-          let userVote = null;
-          if (user) {
-            const { data: voteData } = await supabase
-              .from('votes')
-              .select('vote_type')
-              .eq('comment_id', comment.id)
-              .eq('user_id', user.id)
-              .single();
-            userVote = voteData?.vote_type || null;
-          }
-
-          // Get replies for this comment (including nested replies)
-          const repliesWithDetails = await fetchRepliesRecursively(
-            comment.id,
-            voteCounts,
-            user
-          );
-
-          return {
-            ...comment,
-            username: profile?.username || 'Anonymous',
-            images: images || [],
-            user_vote: userVote,
-            up_votes: voteCounts[comment.id]?.up_votes || 0,
-            down_votes: voteCounts[comment.id]?.down_votes || 0,
-            replies: repliesWithDetails,
-          };
-        })
+      //Proccess the data
+      const processedComments = processCommentsData(
+        allComments || [],
+        allProfiles || [],
+        allImages || [],
+        allVotes || [],
+        user.id
       );
 
-      setComments(commentsWithDetails);
+      setComments(processedComments);
     } catch (error: any) {
       console.error('Error fetching comments:', error);
     }
+  };
+
+  //helper function to process all of that data
+  const processCommentsData = (
+    allComments: any[],
+    allProfiles: any[],
+    allImages: any[],
+    allVotes: any[],
+    currentUserId: string
+  ): Comment[] => {
+    //Create Maps
+    const profilesMap = allProfiles.reduce((acc, profile) => {
+      acc[profile.user_id] = profile.username;
+      return acc;
+    }, {});
+    const imagesMap = allImages.reduce((acc, image) => {
+      if (!acc[image.comment_id]) acc[image.comment_id] = [];
+      acc[image.comment_id].push(image);
+      return acc;
+    }, {});
+
+    const votesMap = allVotes.reduce((acc, vote) => {
+      if (!acc[vote.comment_id])
+        acc[vote.comment_id] = { up_votes: 0, down_votes: 0, userVotes: {} };
+      if (vote.vote_type === 'up') acc[vote.comment_id].up_votes++;
+      if (vote.vote_type === 'down') acc[vote.comment_id].down_votes++;
+      acc[vote.comment_id].userVotes[vote.user_id] = vote.vote_type;
+      return acc;
+    }, {});
+
+    //nested structure
+    const buildNestedComments = (parentId: string | null): Comment[] => {
+      return allComments
+        .filter((comment) => comment.parent_comment_id === parentId)
+        .map((comment) => ({
+          ...comment,
+          username: profilesMap[comment.user_id] || 'Anonymous',
+          images: imagesMap[comment.id] || [],
+          user_vote: votesMap[comment.id]?.userVotes[currentUserId] || null,
+          up_votes: votesMap[comment.id]?.up_votes || 0,
+          down_votes: votesMap[comment.id]?.down_votes || 0,
+          replies: buildNestedComments(comment.id),
+        }));
+    };
+    return buildNestedComments(null);
   };
 
   const calculateCommentStats = () => {
@@ -551,7 +505,12 @@ export default function ClaimDetail() {
     }
   };
 
-  const uploadImages = async (commentId: string): Promise<string[]> => {
+  const uploadImages = async (
+    commentId: string,
+    imageSource: 'comment' | 'reply'
+  ): Promise<string[]> => {
+    const images = imageSource === 'comment' ? selectedImages : replyImages;
+    const prefix = imageSource === 'comment' ? 'comment' : 'reply';
     const uploadedUrls: string[] = [];
 
     // Check authentication first
@@ -566,12 +525,12 @@ export default function ClaimDetail() {
       return uploadedUrls;
     }
 
-    for (const imageUri of selectedImages) {
+    for (const imageUri of images) {
       try {
         // Generate a unique filename with proper extension
         const timestamp = Date.now();
         const randomId = Math.random().toString(36).substring(2, 15);
-        const fileName = `comment-${commentId}-${timestamp}-${randomId}.jpg`;
+        const fileName = `${prefix}-${commentId}-${timestamp}-${randomId}.jpg`;
 
         // Get file info using expo-file-system
         const fileInfo = await FileSystem.getInfoAsync(imageUri);
@@ -637,200 +596,6 @@ export default function ClaimDetail() {
         Alert.alert(
           'Upload Error',
           `Failed to upload image: ${error.message || 'Unknown error'}`
-        );
-        // Continue with other images even if one fails
-      }
-    }
-
-    return uploadedUrls;
-  };
-
-  // Alternative upload function using FileSystem.uploadAsync (more efficient for large files)
-  const uploadImagesWithFileSystem = async (
-    commentId: string
-  ): Promise<string[]> => {
-    const uploadedUrls: string[] = [];
-
-    // Check authentication first
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      console.error('Authentication error during upload:', authError);
-      Alert.alert('Error', 'Please log in again to upload images');
-      return uploadedUrls;
-    }
-
-    for (const imageUri of selectedImages) {
-      try {
-        // Generate a unique filename
-        const timestamp = Date.now();
-        const randomId = Math.random().toString(36).substring(2, 15);
-        const fileName = `comment-${commentId}-${timestamp}-${randomId}.jpg`;
-
-        // Get file info
-        const fileInfo = await FileSystem.getInfoAsync(imageUri);
-
-        if (!fileInfo.exists) {
-          throw new Error('Image file does not exist');
-        }
-
-        // Get file size
-        const fileSize = fileInfo.size || 0;
-
-        if (fileSize === 0) {
-          throw new Error('Image file is empty (0 bytes)');
-        }
-
-        // Read the file as base64 (more efficient than the previous approach)
-        const base64Data = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        // Validate data
-        if (!base64Data || base64Data.length === 0) {
-          throw new Error('Image file is empty');
-        }
-
-        // FIXED: Convert base64 to Uint8Array for proper upload
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-
-        // Upload to Supabase storage using Uint8Array
-        const { data, error } = await supabase.storage
-          .from('comment-images')
-          .upload(fileName, byteArray, {
-            contentType: 'image/jpeg',
-            cacheControl: '3600',
-          });
-
-        if (error) {
-          console.error('Supabase upload error:', error);
-          throw error;
-        }
-
-        // Get the public URL
-        const { data: urlData } = supabase.storage
-          .from('comment-images')
-          .getPublicUrl(fileName);
-
-        uploadedUrls.push(urlData.publicUrl);
-
-        // Save image record to database
-        const { error: dbError } = await supabase.from('images').insert({
-          comment_id: commentId,
-          user_id: user.id,
-          image_url: urlData.publicUrl,
-          file_name: fileName,
-          file_size: fileSize,
-          content_type: 'image/jpeg',
-        });
-
-        if (dbError) {
-          console.error('Database insert error:', dbError);
-          throw dbError;
-        }
-      } catch (error: any) {
-        console.error('Error uploading image with FileSystem:', error);
-        Alert.alert(
-          'Upload Error',
-          `Failed to upload image: ${error.message || 'Unknown error'}`
-        );
-        // Continue with other images even if one fails
-      }
-    }
-
-    return uploadedUrls;
-  };
-
-  const uploadReplyImages = async (commentId: string): Promise<string[]> => {
-    const uploadedUrls: string[] = [];
-
-    for (const imageUri of replyImages) {
-      try {
-        // Generate a unique filename with proper extension
-        const timestamp = Date.now();
-        const randomId = Math.random().toString(36).substring(2, 15);
-        const fileName = `reply-${commentId}-${timestamp}-${randomId}.jpg`;
-
-        // Get file info using expo-file-system
-        const fileInfo = await FileSystem.getInfoAsync(imageUri);
-
-        if (!fileInfo.exists) {
-          throw new Error('Reply image file does not exist');
-        }
-
-        // Read the file as base64
-        const base64Data = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        // Validate data
-        if (!base64Data || base64Data.length === 0) {
-          throw new Error('Reply image file is empty');
-        }
-
-        // FIXED: Convert base64 to Uint8Array for proper upload
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-
-        // Upload to Supabase storage using Uint8Array
-        const { data, error } = await supabase.storage
-          .from('comment-images')
-          .upload(fileName, byteArray, {
-            contentType: 'image/jpeg',
-            cacheControl: '3600',
-          });
-
-        if (error) {
-          console.error('Supabase upload error:', error);
-          throw error;
-        }
-
-        // Get the public URL
-        const { data: urlData } = supabase.storage
-          .from('comment-images')
-          .getPublicUrl(fileName);
-
-        uploadedUrls.push(urlData.publicUrl);
-
-        // Get current user
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          throw new Error('User not authenticated');
-        }
-
-        // Save image record to database
-        const { error: dbError } = await supabase.from('images').insert({
-          comment_id: commentId,
-          user_id: user.id,
-          image_url: urlData.publicUrl,
-          file_name: fileName,
-          file_size: fileInfo.size || 0,
-          content_type: 'image/jpeg',
-        });
-
-        if (dbError) {
-          console.error('Database insert error:', dbError);
-          throw dbError;
-        }
-      } catch (error: any) {
-        console.error('Error uploading reply image:', error);
-        Alert.alert(
-          'Upload Error',
-          `Failed to upload reply image: ${error.message || 'Unknown error'}`
         );
         // Continue with other images even if one fails
       }
@@ -920,7 +685,7 @@ export default function ClaimDetail() {
 
       // Upload images if any
       if (selectedImages.length > 0) {
-        const uploadedUrls = await uploadImages(comment.id);
+        const uploadedUrls = await uploadImages(comment.id, 'comment');
       }
 
       setNewComment('');
@@ -1031,7 +796,7 @@ export default function ClaimDetail() {
 
       // Upload images if any
       if (replyImages.length > 0) {
-        const uploadedUrls = await uploadReplyImages(reply.id);
+        const uploadedUrls = await uploadImages(reply.id, 'reply');
       }
 
       setReplyText('');
