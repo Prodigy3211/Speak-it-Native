@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Try } from 'expo-router/build/views/Try';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -168,90 +169,6 @@ export default function ClaimDetail() {
       Alert.alert('Error', 'Failed to load claim');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchRepliesRecursively = async (
-    parentId: string,
-    voteCounts: any,
-    user: any
-  ): Promise<Comment[]> => {
-    try {
-      // Get direct replies to this comment
-      const { data: replies, error: repliesError } = await supabase
-        .from('comments')
-        .select('*')
-        .eq('parent_comment_id', parentId)
-        .order('created_at', { ascending: true });
-
-      if (repliesError) {
-        console.error(
-          'Error fetching replies for comment',
-          parentId,
-          ':',
-          repliesError
-        );
-        return [];
-      }
-
-      // Process each reply and get its nested replies
-      const repliesWithDetails = await Promise.all(
-        (replies || []).map(async (reply) => {
-          const { data: replyProfile } = await supabase
-            .from('profiles')
-            .select('username')
-            .eq('user_id', reply.user_id)
-            .single();
-
-          const { data: replyImages, error: imagesError } = await supabase
-            .from('images')
-            .select('*')
-            .eq('comment_id', reply.id);
-
-          if (imagesError) {
-            console.error(
-              'Error fetching images for reply',
-              reply.id,
-              ':',
-              imagesError
-            );
-          }
-
-          // Get user's vote on this reply
-          let replyUserVote = null;
-          if (user) {
-            const { data: replyVoteData } = await supabase
-              .from('votes')
-              .select('vote_type')
-              .eq('comment_id', reply.id)
-              .eq('user_id', user.id)
-              .single();
-            replyUserVote = replyVoteData?.vote_type || null;
-          }
-
-          // Recursively get nested replies
-          const nestedReplies = await fetchRepliesRecursively(
-            reply.id,
-            voteCounts,
-            user
-          );
-
-          return {
-            ...reply,
-            username: replyProfile?.username || 'Anonymous',
-            images: replyImages || [],
-            user_vote: replyUserVote,
-            up_votes: voteCounts[reply.id]?.up_votes || 0,
-            down_votes: voteCounts[reply.id]?.down_votes || 0,
-            replies: nestedReplies,
-          };
-        })
-      );
-
-      return repliesWithDetails;
-    } catch (error) {
-      console.error('Error in fetchRepliesRecursively:', error);
-      return [];
     }
   };
 
@@ -507,7 +424,7 @@ export default function ClaimDetail() {
 
   const uploadImages = async (
     commentId: string,
-    imageSource: 'comment' | 'reply'
+    imageSource: 'comment' | 'reply' | 'nested-reply'
   ): Promise<string[]> => {
     const images = imageSource === 'comment' ? selectedImages : replyImages;
     const prefix = imageSource === 'comment' ? 'comment' : 'reply';
@@ -627,7 +544,8 @@ export default function ClaimDetail() {
           [
             {
               text: 'Submit Anyway',
-              onPress: () => submitCommentToDatabase(),
+              onPress: () =>
+                submitCommentToDatabase(newComment, selectedImages, 'comment'),
             },
             {
               text: 'Edit Comment',
@@ -653,10 +571,15 @@ export default function ClaimDetail() {
     }
 
     // Submit the comment
-    submitCommentToDatabase();
+    submitCommentToDatabase(newComment, selectedImages, 'comment');
   };
 
-  const submitCommentToDatabase = async () => {
+  const submitCommentToDatabase = async (
+    content: string,
+    images: string[],
+    imageSource: 'comment' | 'reply' | 'nested-reply',
+    parentCommentId?: string
+  ) => {
     try {
       setSubmitting(true);
 
@@ -673,7 +596,8 @@ export default function ClaimDetail() {
         .insert({
           claim_id: claimId,
           user_id: user.id,
-          content: newComment.trim(),
+          content: content.trim(),
+          parent_comment_id: parentCommentId,
           affirmative: isAffirmative,
           up_votes: 0,
           down_votes: 0,
@@ -684,135 +608,35 @@ export default function ClaimDetail() {
       if (error) throw error;
 
       // Upload images if any
-      if (selectedImages.length > 0) {
-        const uploadedUrls = await uploadImages(comment.id, 'comment');
+      if (images.length > 0) {
+        await uploadImages(comment.id, imageSource);
       }
 
-      setNewComment('');
-      setSelectedImages([]);
-      setIsAffirmative(null);
-      setCommentModalVisible(false);
+      if (imageSource === 'comment') {
+        setNewComment('');
+        setSelectedImages([]);
+        setCommentModalVisible(false);
+      } else {
+        setReplyText('');
+        setReplyImages([]);
+        setReplyingTo(null);
+      }
 
       // Refresh comments immediately
       await fetchComments();
 
-      // Send notification to claim creator
+      // Different notification logic based on type
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user && claim) {
+        if (imageSource === 'comment') {
+          // Notify claim creator
           await sendCommentClientNotification(
-            claimId,
-            claim.title,
-            claim.op_id,
-            user.email || 'Anonymous'
+            claimId || '',
+            claim?.title || 'Untitled Claim',
+            claim?.op_id || '',
+            user?.email || 'Anonymous'
           );
-        }
-      } catch (notificationError) {
-        console.error('Error sending notification:', notificationError);
-        // Don't show error to user, notification failure shouldn't break comment submission
-      }
-
-      // Show success message
-      Alert.alert('Success', 'Comment posted successfully!');
-    } catch (error: any) {
-      console.error('Error submitting comment:', error);
-      Alert.alert('Error', 'Failed to submit comment');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitReply = async (parentCommentId: string) => {
-    // Content validation (no blocking, only warnings)
-    if (replyText.trim()) {
-      const replyValidation = validateUserContent(replyText, 'comment');
-      if (!replyValidation.isValid) {
-        Alert.alert(
-          'Validation Error',
-          replyValidation.errorMessage || 'Please review your reply'
-        );
-        return;
-      }
-
-      // Check for content warnings
-      if (replyValidation.warning) {
-        Alert.alert(
-          'Content Warning',
-          replyValidation.warning +
-            '\n\nYou can still submit your reply, but it may be flagged by the community.',
-          [
-            {
-              text: 'Submit Anyway',
-              onPress: () => submitReplyToDatabase(parentCommentId),
-            },
-            {
-              text: 'Edit Reply',
-              style: 'cancel',
-            },
-          ]
-        );
-        return;
-      }
-    }
-
-    if (!replyText.trim() && replyImages.length === 0) {
-      Alert.alert('Error', 'Please enter a reply or add an image');
-      return;
-    }
-
-    // Submit the reply
-    submitReplyToDatabase(parentCommentId);
-  };
-
-  const submitReplyToDatabase = async (parentCommentId: string) => {
-    try {
-      setSubmitting(true);
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        Alert.alert('Error', 'You must be logged in to reply');
-        return;
-      }
-
-      const { data: reply, error } = await supabase
-        .from('comments')
-        .insert({
-          claim_id: claimId,
-          user_id: user.id,
-          content: replyText.trim(),
-          parent_comment_id: parentCommentId,
-          affirmative: isAffirmative, // Use the selected stance
-          up_votes: 0,
-          down_votes: 0,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Upload images if any
-      if (replyImages.length > 0) {
-        const uploadedUrls = await uploadImages(reply.id, 'reply');
-      }
-
-      setReplyText('');
-      setReplyImages([]);
-      setReplyingTo(null);
-
-      // Refresh comments immediately
-      await fetchComments();
-
-      // Send notification to parent comment owner
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user && claim) {
-          // Get parent comment to find the owner
+        } else if (imageSource === 'reply' || imageSource === 'nested-reply') {
+          // Notify parent comment owner
           const { data: parentComment } = await supabase
             .from('comments')
             .select('user_id')
@@ -830,15 +654,20 @@ export default function ClaimDetail() {
           }
         }
       } catch (notificationError) {
-        console.error('Error sending reply notification:', notificationError);
-        // Don't show error to user, notification failure shouldn't break reply submission
+        console.error('Error sending notification:', notificationError);
+        // Don't show error to user, notification failure shouldn't break comment submission
       }
 
       // Show success message
-      Alert.alert('Success', 'Reply posted successfully!');
+      Alert.alert(
+        'Success',
+        `${
+          imageSource === 'comment' ? 'Comment' : 'Reply'
+        } posted successfully!`
+      );
     } catch (error: any) {
-      console.error('Error submitting reply:', error);
-      Alert.alert('Error', 'Failed to submit reply');
+      console.error('Error submitting comment:', error);
+      Alert.alert('Error', 'Failed to submit comment');
     } finally {
       setSubmitting(false);
     }
@@ -1057,7 +886,12 @@ export default function ClaimDetail() {
                   styles.disabledButton,
               ]}
               onPress={() => {
-                submitReply(item.id);
+                submitCommentToDatabase(
+                  replyText,
+                  replyImages,
+                  'reply',
+                  item.id
+                );
                 hapticFeedback.submit();
               }}
               disabled={
@@ -1326,17 +1160,20 @@ export default function ClaimDetail() {
                       style={[
                         styles.submitReplyButton,
                         ((!replyText.trim() && replyImages.length === 0) ||
-                          isAffirmative === null ||
                           submitting) &&
                           styles.disabledButton,
                       ]}
                       onPress={() => {
-                        submitReply(reply.id);
+                        submitCommentToDatabase(
+                          replyText,
+                          replyImages,
+                          'reply',
+                          item.id
+                        );
                         hapticFeedback.submit();
                       }}
                       disabled={
                         (!replyText.trim() && replyImages.length === 0) ||
-                        isAffirmative === null ||
                         submitting
                       }
                     >
@@ -1638,7 +1475,12 @@ export default function ClaimDetail() {
                                   styles.disabledButton,
                               ]}
                               onPress={() => {
-                                submitReply(nestedReply.id);
+                                submitCommentToDatabase(
+                                  replyText,
+                                  replyImages,
+                                  'nested-reply',
+                                  nestedReply.id
+                                );
                                 hapticFeedback.submit();
                               }}
                               disabled={
