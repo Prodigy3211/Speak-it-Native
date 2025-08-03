@@ -644,8 +644,8 @@ export default function ClaimDetail() {
           if (parentComment && parentComment.user_id !== user.id) {
             await sendReplyClientNotification(
               claimId,
-              claim.title,
-              parentCommentId,
+              claim?.title || 'Untitled Claim',
+              parentCommentId || '',
               parentComment.user_id,
               user.email || 'Anonymous'
             );
@@ -1674,51 +1674,6 @@ export default function ClaimDetail() {
             }}
           >
             <Ionicons name='refresh' size={20} color='#007AFF' />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.debugButton}
-            onPress={async () => {
-              try {
-                const result = await ImagePicker.launchImageLibraryAsync({
-                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                  allowsEditing: false,
-                  quality: 1.0,
-                });
-                if (
-                  !result.canceled &&
-                  result.assets &&
-                  result.assets.length > 0
-                ) {
-                  const asset = result.assets[0];
-
-                  // Test file system approach
-                  const fileInfo = await FileSystem.getInfoAsync(asset.uri);
-
-                  if (fileInfo.exists) {
-                    const base64Data = await FileSystem.readAsStringAsync(
-                      asset.uri,
-                      {
-                        encoding: FileSystem.EncodingType.Base64,
-                      }
-                    );
-
-                    // Convert to blob
-                    const byteCharacters = atob(base64Data);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                      byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    const blob = new Blob([byteArray], { type: 'image/jpeg' });
-                  }
-                }
-              } catch (error: any) {
-                console.error('DEBUG Image picker error:', error);
-              }
-            }}
-          >
-            <Ionicons name='bug' size={20} color='#FF6B35' />
           </TouchableOpacity>
         </View>
 

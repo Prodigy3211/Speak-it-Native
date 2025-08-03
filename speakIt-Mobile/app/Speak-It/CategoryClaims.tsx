@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { generateSmartLink } from '@/lib/deepLinks';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -46,12 +46,6 @@ export default function CategoryClaims() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (category) {
-      fetchCategoryClaims();
-    }
-  }, [category]);
 
   // Recursive function to count all comments including nested replies with stance
   const countCommentsRecursively = (
