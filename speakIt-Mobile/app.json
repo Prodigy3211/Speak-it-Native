@@ -14,11 +14,15 @@
       "buildNumber": "7",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": ["remote-notification"],
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLName": "speakitmobile",
+            "CFBundleURLSchemes": ["speakitmobile"]
+          }
+        ]
       },
-      "associatedDomains": [
-        "applinks:speak-it-three.vercel.app"
-      ]
+      "associatedDomains": ["applinks:speak-it-three.vercel.app"]
     },
     "android": {
       "adaptiveIcon": {

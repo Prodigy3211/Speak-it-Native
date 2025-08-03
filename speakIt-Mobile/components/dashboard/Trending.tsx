@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { generateSmartLink } from '@/lib/deepLinks';
 import {
   ActivityIndicator,
   FlatList,
@@ -27,13 +28,6 @@ interface Claim {
   againstComments: number;
   forPercentage: number;
   againstPercentage: number;
-}
-
-interface Comment {
-  id: string;
-  parent_comment_id: string | null;
-  affirmative: boolean;
-  replies: Comment[];
 }
 
 export default function Trending() {
@@ -135,7 +129,10 @@ export default function Trending() {
               e.stopPropagation();
               hapticFeedback.share();
               try {
-                const deepLink = `speakitmobile://claim/${item.id}`;
+                const deepLink = generateSmartLink('claim', {
+                  claimId: item.id,
+                  category: item.category,
+                });
                 const appStoreLink =
                   Platform.OS === 'ios'
                     ? 'https://apps.apple.com/us/app/speak-it/id6748719689' // Replace with actual App Store link

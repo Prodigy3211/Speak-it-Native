@@ -10,6 +10,32 @@ export const handleDeepLink = async (url: string): Promise<void> => {
   try {
     console.log('Handling deep link:', url);
 
+    // Check if the URL is a deep link
+    if (url.startsWith('speakitmobile://')) {
+      const path = url.replace('speakitmobile://', '');
+
+      if (path.startsWith('claim/')) {
+        //mobile format: claim/{claimId}
+        const claimId = path.replace('claim/', '');
+        if (claimId) {
+          router.push({
+            pathname: '/Speak-It/ClaimDetail' as any,
+            params: { claimId },
+          });
+          return;
+        }
+      } else if (path.startsWith('category/')) {
+        //mobile format: category/{category}
+        const category = path.replace('category/', '');
+        if (category) {
+          router.push({
+            pathname: '/Speak-It/CategoryClaims' as any,
+            params: { category: decodeURIComponent(category) },
+          });
+          return;
+        }
+      }
+    }
     // Parse the URL
     const urlObj = new URL(url);
     const path = urlObj.pathname;
