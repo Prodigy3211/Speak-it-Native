@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { CATEGORIES } from '@/lib/constants';
 import { CATEGORY_IMAGES } from '@/lib/categoryImages';
