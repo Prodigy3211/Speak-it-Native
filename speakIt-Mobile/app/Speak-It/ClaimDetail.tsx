@@ -3,10 +3,6 @@ import FlagContent from '@/components/FlagContent';
 import { validateUserContent } from '@/lib/contentModeration';
 import { generateSmartLink } from '@/lib/deepLinks';
 import { hapticFeedback } from '@/lib/haptics';
-import {
-  sendCommentClientNotification,
-  sendReplyClientNotification,
-} from '@/lib/notificationHelpers';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -80,6 +76,7 @@ export default function ClaimDetail() {
   const [isAffirmative, setIsAffirmative] = useState<boolean | null>(null);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const supabaseUrl = 'https://qdpammoeepwgapqyfrrh.supabase.co';
 
   useEffect(() => {
     if (claimId) {
@@ -623,18 +620,39 @@ export default function ClaimDetail() {
       // Refresh comments immediately
       await fetchComments();
 
-      // Different notification logic based on type
+      //send notifications to Edge Function
       try {
         if (imageSource === 'comment') {
-          // Notify claim creator
-          await sendCommentClientNotification(
-            claimId || '',
-            claim?.title || 'Untitled Claim',
-            claim?.op_id || '',
-            user?.email || 'Anonymous'
-          );
+          //claim creator
+          if (claim?.op_id && claim.op_id !== user.id) {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            if (session?.access_token) {
+              const response = await fetch(
+                `${supabaseUrl}/functions/v1/send-notification`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`,
+                  },
+                  body: JSON.stringify({
+                    userId: claim.op_id,
+                    title: 'New Comment',
+                    body: 'Someone commented on your claim! 🫨',
+                    data: {
+                      claimId: claim.id,
+                      type: 'new_comment',
+                      commentId: comment.id,
+                    },
+                  }),
+                }
+              );
+            }
+          }
         } else if (imageSource === 'reply' || imageSource === 'nested-reply') {
-          // Notify parent comment owner
+          // notify reply owner
           const { data: parentComment } = await supabase
             .from('comments')
             .select('user_id')
@@ -642,27 +660,37 @@ export default function ClaimDetail() {
             .single();
 
           if (parentComment && parentComment.user_id !== user.id) {
-            await sendReplyClientNotification(
-              claimId,
-              claim?.title || 'Untitled Claim',
-              parentCommentId || '',
-              parentComment.user_id,
-              user.email || 'Anonymous'
-            );
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            if (session?.access_token) {
+              const response = await fetch(
+                `${supabaseUrl}/functions/v1/send-notification`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authroization: `Bearer ${session.access_token}`,
+                  },
+                  body: JSON.stringify({
+                    userId: parentComment.user_id,
+                    title: 'New Reply',
+                    body: 'Someone replied to your comment! 🫨',
+                    data: {
+                      claimId: claim.id || '',
+                      type: 'new_reply',
+                      commentId: comment.id,
+                      parentCommentId,
+                    },
+                  }),
+                }
+              );
+            }
           }
         }
-      } catch (notificationError) {
-        console.error('Error sending notification:', notificationError);
-        // Don't show error to user, notification failure shouldn't break comment submission
+      } catch (error: any) {
+        console.error('Error sending notification:', error);
       }
-
-      // Show success message
-      Alert.alert(
-        'Success',
-        `${
-          imageSource === 'comment' ? 'Comment' : 'Reply'
-        } posted successfully!`
-      );
     } catch (error: any) {
       console.error('Error submitting comment:', error);
       Alert.alert('Error', 'Failed to submit comment');
