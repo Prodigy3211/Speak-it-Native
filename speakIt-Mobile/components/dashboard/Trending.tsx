@@ -1,4 +1,3 @@
-import { getCommentsExcludingBlocked } from '@/lib/blockingService';
 import { hapticFeedback } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';

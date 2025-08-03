@@ -172,7 +172,7 @@ export default function CategoryClaims() {
       const { data: categoryClaims, error: claimsError } = await supabase
         .from('claims')
         .select('*')
-        .eq('category', category)
+        .ilike('category', category)
         .order('created_at', { ascending: false });
 
       if (claimsError) {

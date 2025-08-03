@@ -1542,7 +1542,7 @@ export default function ClaimDetail() {
         >
           <Ionicons name='arrow-back' size={24} color='#007AFF' />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>They Said What??</Text>
+        <Text style={styles.headerTitle}>Like, Comment, or Share! 😏</Text>
         <TouchableOpacity
           style={styles.shareButton}
           onPress={async () => {

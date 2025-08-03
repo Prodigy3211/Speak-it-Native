@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
   Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -42,31 +41,6 @@ const categories: Category[] = CATEGORIES.map((name, index) => {
 });
 
 export default function Categories() {
-  const [categoryImages, setCategoryImages] = useState<{
-    [key: string]: string;
-  }>({});
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadCategoryImages();
-  }, []);
-
-  const loadCategoryImages = async () => {
-    try {
-      const imageUrls: { [key: string]: string } = {};
-
-      for (const category of categories) {
-        imageUrls[category.id] = category.imageUrl;
-      }
-
-      setCategoryImages(imageUrls);
-    } catch (error) {
-      console.error('Error loading category images:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleCategoryPress = (category: Category) => {
     // Navigate to the category claims view
     router.push({
@@ -85,7 +59,7 @@ export default function Categories() {
     >
       <View style={styles.imageContainer}>
         <Image
-          source={{ uri: categoryImages[item.id] }}
+          source={{ uri: item.imageUrl }}
           style={styles.categoryImage}
           resizeMode='cover'
         />
@@ -98,15 +72,6 @@ export default function Categories() {
       </View>
     </TouchableOpacity>
   );
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color='#007AFF' />
-        <Text style={styles.loadingText}>Loading categories...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -121,6 +86,15 @@ export default function Categories() {
         columnWrapperStyle={styles.row}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={6}
+        windowSize={10}
+        initialNumToRender={6}
+        getItemLayout={(data, index) => ({
+          length: 200,
+          offset: 200 * Math.floor(index / 2),
+          index,
+        })}
       />
     </View>
   );
