@@ -637,7 +637,7 @@ export default function ClaimDetail() {
                     Authorization: `Bearer ${session.access_token}`,
                   },
                   body: JSON.stringify({
-                    userId: claim.op_id,
+                    targetUserId: claim.op_id,
                     title: 'New Comment',
                     body: 'Someone commented on your claim! 🫨',
                     data: {
@@ -672,7 +672,7 @@ export default function ClaimDetail() {
                     Authorization: `Bearer ${session.access_token}`,
                   },
                   body: JSON.stringify({
-                    userId: parentComment.user_id,
+                    targetUserId: parentComment.user_id,
                     title: 'New Reply',
                     body: 'Someone replied to your comment! 🫨',
                     data: {

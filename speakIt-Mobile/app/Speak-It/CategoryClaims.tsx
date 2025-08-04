@@ -3,7 +3,7 @@ import { hapticFeedback } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -45,6 +45,13 @@ export default function CategoryClaims() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch claims when component mounts
+  useEffect(() => {
+    if (category) {
+      fetchCategoryClaims();
+    }
+  }, [category]);
 
   // Recursive function to count all comments including nested replies with stance
   const countCommentsRecursively = (

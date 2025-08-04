@@ -4,7 +4,7 @@ import { supabase } from './supabase';
  * Send a push notification to a specific user
  */
 export const sendNotification = async (
-  userId: string,
+  targetUserId: string,
   title: string,
   body: string,
   data?: any,
@@ -18,10 +18,10 @@ export const sendNotification = async (
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
-          userId,
+          targetUserId,
           title,
           body,
           data,
@@ -58,22 +58,25 @@ export const sendNotificationWithJWT = async (
 ) => {
   try {
     // Get the current user's session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
     if (sessionError || !session?.access_token) {
       console.error('No valid session found:', sessionError);
       return { success: false, error: 'No valid session found' };
     }
 
     console.log('Sending notification with JWT for user:', session.user.id);
-    
+
     const response = await fetch(
       `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           title,
@@ -115,25 +118,28 @@ export const sendNotificationToUserWithJWT = async (
 ) => {
   try {
     // Get the current user's session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
     if (sessionError || !session?.access_token) {
       console.error('No valid session found:', sessionError);
       return { success: false, error: 'No valid session found' };
     }
 
     console.log('Sending notification with JWT to user:', targetUserId);
-    
+
     const response = await fetch(
       `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          userId: targetUserId, // This will be validated against the JWT user ID
+          targetUserId: targetUserId, // Use the new parameter for sending to other users
           title,
           body,
           data,
@@ -163,28 +169,34 @@ export const sendNotificationToUserWithJWT = async (
  * This bypasses the database HTTP limitation
  */
 export async function sendNotificationViaEdgeFunction(
-  userId: string,
+  targetUserId: string,
   title: string,
   body: string,
   data?: any
 ): Promise<boolean> {
   try {
-    console.log('Sending notification via Edge Function for user:', userId);
-    
-    const response = await fetch('https://qdpammoeepwgapqyfrrh.supabase.co/functions/v1/send-notification', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        userId,
-        title,
-        body,
-        data,
-        sound: 'default'
-      })
-    });
+    console.log(
+      'Sending notification via Edge Function for user:',
+      targetUserId
+    );
+
+    const response = await fetch(
+      'https://qdpammoeepwgapqyfrrh.supabase.co/functions/v1/send-notification',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          targetUserId,
+          title,
+          body,
+          data,
+          sound: 'default',
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -225,7 +237,9 @@ export async function sendNewCommentNotification(
     }
 
     // Don't notify if commenter is the claim creator
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user && user.id === claim.op_id) {
       console.log('Commenter is claim creator, skipping notification');
       return;
@@ -239,7 +253,7 @@ export async function sendNewCommentNotification(
       {
         type: 'new_comment',
         claim_id: claimId,
-        comment_id: commentId
+        comment_id: commentId,
       }
     );
   } catch (error) {
@@ -259,9 +273,9 @@ export const sendNewClaimNotification = async (
 ) => {
   try {
     const notifications = await Promise.all(
-      userIds.map(userId =>
+      userIds.map((targetUserId) =>
         sendNotification(
-          userId,
+          targetUserId,
           'New Claim',
           `${creatorUsername} created a new claim in ${category}`,
           {
@@ -276,8 +290,8 @@ export const sendNewClaimNotification = async (
 
     return {
       success: true,
-      sent: notifications.filter(n => n.success).length,
-      failed: notifications.filter(n => !n.success).length,
+      sent: notifications.filter((n) => n.success).length,
+      failed: notifications.filter((n) => !n.success).length,
     };
   } catch (error) {
     console.error('Error sending new claim notifications:', error);
@@ -324,7 +338,9 @@ export const sendReplyNotification = async (
 ) => {
   try {
     // Don't notify if replier is the parent commenter
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user && user.id === parentCommenterId) {
       return { success: true, skipped: true };
     }
@@ -357,9 +373,9 @@ export const sendTrendingNotification = async (
 ) => {
   try {
     const notifications = await Promise.all(
-      userIds.map(userId =>
+      userIds.map((targetUserId) =>
         sendNotification(
-          userId,
+          targetUserId,
           'Trending Claim',
           `"${claimTitle}" is trending in ${category}`,
           {
@@ -374,14 +390,14 @@ export const sendTrendingNotification = async (
 
     return {
       success: true,
-      sent: notifications.filter(n => n.success).length,
-      failed: notifications.filter(n => !n.success).length,
+      sent: notifications.filter((n) => n.success).length,
+      failed: notifications.filter((n) => !n.success).length,
     };
   } catch (error) {
     console.error('Error sending trending notifications:', error);
     return { success: false, error };
   }
-}; 
+};
 
 /**
  * EXAMPLE USAGE FUNCTIONS
@@ -415,7 +431,7 @@ export const sendNewClaimNotificationToSelf = async (
     {
       type: 'new_claim',
       claim_id: claimId,
-      category: category
+      category: category,
     }
   );
 };
@@ -436,7 +452,7 @@ export const sendCommentNotificationToClaimOwner = async (
     {
       type: 'new_comment',
       claim_title: claimTitle,
-      commenter: commenterUsername
+      commenter: commenterUsername,
     }
   );
 };
@@ -457,7 +473,7 @@ export const sendReplyNotificationToCommentOwner = async (
     {
       type: 'new_reply',
       claim_title: claimTitle,
-      replier: replierUsername
+      replier: replierUsername,
     }
   );
 };
@@ -478,22 +494,22 @@ export const sendMentionNotificationWithJWT = async (
     {
       type: 'mention',
       claim_title: claimTitle,
-      mentioner: mentionerUsername
+      mentioner: mentionerUsername,
     }
   );
-}; 
+};
 
 /**
  * COMPREHENSIVE USAGE EXAMPLE
- * 
+ *
  * Here's how to integrate JWT notifications into your app components:
- * 
+ *
  * // In your CreateClaim.tsx component:
  * import { sendNewClaimNotificationToSelf } from '@/lib/notificationHelpers';
- * 
+ *
  * const handleCreateClaim = async () => {
  *   // ... create claim logic ...
- *   
+ *
  *   // Send notification to self after successful creation
  *   await sendNewClaimNotificationToSelf(
  *     newClaim.id,
@@ -501,13 +517,13 @@ export const sendMentionNotificationWithJWT = async (
  *     newClaim.category
  *   );
  * };
- * 
+ *
  * // In your ClaimDetail.tsx component when adding comments:
  * import { sendCommentNotificationToClaimOwner } from '@/lib/notificationHelpers';
- * 
+ *
  * const handleAddComment = async () => {
  *   // ... add comment logic ...
- *   
+ *
  *   // Send notification to claim owner
  *   await sendCommentNotificationToClaimOwner(
  *     claim.op_id, // claim owner's user ID
@@ -515,13 +531,13 @@ export const sendMentionNotificationWithJWT = async (
  *     currentUser.username
  *   );
  * };
- * 
+ *
  * // In your comment reply logic:
  * import { sendReplyNotificationToCommentOwner } from '@/lib/notificationHelpers';
- * 
+ *
  * const handleReplyToComment = async () => {
  *   // ... add reply logic ...
- *   
+ *
  *   // Send notification to comment owner
  *   await sendReplyNotificationToCommentOwner(
  *     parentComment.user_id,
@@ -529,13 +545,13 @@ export const sendMentionNotificationWithJWT = async (
  *     currentUser.username
  *   );
  * };
- * 
+ *
  * // For mentions in comments:
  * import { sendMentionNotificationWithJWT } from '@/lib/notificationHelpers';
- * 
+ *
  * const handleAddCommentWithMentions = async () => {
  *   // ... add comment logic ...
- *   
+ *
  *   // Check for @mentions and send notifications
  *   const mentions = extractMentions(commentText); // Your mention extraction logic
  *   for (const mentionedUser of mentions) {
@@ -546,11 +562,11 @@ export const sendMentionNotificationWithJWT = async (
  *     );
  *   }
  * };
- */ 
+ */
 
 /**
  * CLIENT-SIDE NOTIFICATION SYSTEM
- * 
+ *
  * These functions send notifications directly from the iPhone app
  * No need for net.http or Supabase Pro account
  */
@@ -569,8 +585,11 @@ export const sendClientNotification = async (
 ): Promise<{ success: boolean; error?: string }> => {
   try {
     // Get current user's session to ensure they're authenticated
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
     if (sessionError || !session?.access_token) {
       console.error('No valid session found:', sessionError);
       return { success: false, error: 'No valid session found' };
@@ -593,7 +612,7 @@ export const sendClientNotification = async (
     }
 
     // Prepare push messages for all user's devices
-    const messages = tokens.map(token => ({
+    const messages = tokens.map((token) => ({
       to: token.token,
       sound,
       title,
@@ -602,13 +621,15 @@ export const sendClientNotification = async (
       badge,
     }));
 
-    console.log(`Sending ${messages.length} notifications to user ${targetUserId}`);
+    console.log(
+      `Sending ${messages.length} notifications to user ${targetUserId}`
+    );
 
     // Send notifications via Expo Push API directly from client
     const expoResponse = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Accept-encoding': 'gzip, deflate',
         'Content-Type': 'application/json',
       },
@@ -625,26 +646,26 @@ export const sendClientNotification = async (
     console.log('Expo result:', JSON.stringify(expoResult, null, 2));
 
     // Check for any errors in the response
-    const errors = expoResult.data?.filter((result: any) => result.status === 'error');
+    const errors = expoResult.data?.filter(
+      (result: any) => result.status === 'error'
+    );
     if (errors && errors.length > 0) {
       console.error('Some notifications failed:', errors);
-      
+
       // Remove invalid tokens
       for (const error of errors) {
         if (error.details?.error === 'DeviceNotRegistered') {
           const invalidToken = error.details.expoPushToken;
           console.log('Removing invalid token:', invalidToken);
-          await supabase
-            .from('push_tokens')
-            .delete()
-            .eq('token', invalidToken);
+          await supabase.from('push_tokens').delete().eq('token', invalidToken);
         }
       }
     }
 
-    console.log(`✅ Successfully sent ${messages.length} notifications to user ${targetUserId}`);
+    console.log(
+      `✅ Successfully sent ${messages.length} notifications to user ${targetUserId}`
+    );
     return { success: true };
-
   } catch (error) {
     console.error('Error sending client notification:', error);
     return { success: false, error: 'Internal error' };
@@ -662,14 +683,26 @@ export const sendClientNotificationToMultiple = async (
   data?: any,
   sound: string = 'default',
   badge?: number
-): Promise<{ success: boolean; sent: number; errors: number; error?: string }> => {
+): Promise<{
+  success: boolean;
+  sent: number;
+  errors: number;
+  error?: string;
+}> => {
   try {
     let totalSent = 0;
     let totalErrors = 0;
 
     // Send notifications to each user
     for (const userId of targetUserIds) {
-      const result = await sendClientNotification(userId, title, body, data, sound, badge);
+      const result = await sendClientNotification(
+        userId,
+        title,
+        body,
+        data,
+        sound,
+        badge
+      );
       if (result.success) {
         totalSent++;
       } else {
@@ -677,19 +710,21 @@ export const sendClientNotificationToMultiple = async (
       }
     }
 
-    return { 
-      success: totalErrors === 0, 
-      sent: totalSent, 
-      errors: totalErrors 
+    return {
+      success: totalErrors === 0,
+      sent: totalSent,
+      errors: totalErrors,
     };
-
   } catch (error) {
-    console.error('Error sending client notifications to multiple users:', error);
-    return { 
-      success: false, 
-      sent: 0, 
-      errors: targetUserIds.length, 
-      error: 'Internal error' 
+    console.error(
+      'Error sending client notifications to multiple users:',
+      error
+    );
+    return {
+      success: false,
+      sent: 0,
+      errors: targetUserIds.length,
+      error: 'Internal error',
     };
   }
 };
@@ -708,7 +743,9 @@ export const sendNewClaimClientNotification = async (
   category: string
 ): Promise<void> => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     await sendClientNotification(
@@ -718,7 +755,7 @@ export const sendNewClaimClientNotification = async (
       {
         type: 'new_claim',
         claim_id: claimId,
-        category: category
+        category: category,
       }
     );
   } catch (error) {
@@ -738,7 +775,9 @@ export const sendCommentClientNotification = async (
 ): Promise<void> => {
   try {
     // Don't notify if commenter is the claim owner
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user && user.id === claimOwnerId) {
       console.log('Commenter is claim owner, skipping notification');
       return;
@@ -752,7 +791,7 @@ export const sendCommentClientNotification = async (
         type: 'new_comment',
         claim_id: claimId,
         claim_title: claimTitle,
-        commenter: commenterUsername
+        commenter: commenterUsername,
       }
     );
   } catch (error) {
@@ -773,7 +812,9 @@ export const sendReplyClientNotification = async (
 ): Promise<void> => {
   try {
     // Don't notify if replier is the comment owner
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user && user.id === parentCommenterId) {
       console.log('Replier is comment owner, skipping notification');
       return;
@@ -788,7 +829,7 @@ export const sendReplyClientNotification = async (
         claim_id: claimId,
         claim_title: claimTitle,
         parent_comment_id: parentCommentId,
-        replier: replierUsername
+        replier: replierUsername,
       }
     );
   } catch (error) {
@@ -808,7 +849,9 @@ export const sendMentionClientNotification = async (
 ): Promise<void> => {
   try {
     // Don't notify if mentioner is the mentioned user
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user && user.id === mentionedUserId) {
       console.log('Mentioner is mentioned user, skipping notification');
       return;
@@ -822,7 +865,7 @@ export const sendMentionClientNotification = async (
         type: 'mention',
         claim_id: claimId,
         claim_title: claimTitle,
-        mentioner: mentionerUsername
+        mentioner: mentionerUsername,
       }
     );
   } catch (error) {
@@ -849,7 +892,7 @@ export const sendTrendingClientNotification = async (
         type: 'trending',
         claim_id: claimId,
         claim_title: claimTitle,
-        category: category
+        category: category,
       }
     );
   } catch (error) {
@@ -872,7 +915,7 @@ export const sendFollowClientNotification = async (
       `${followerUsername} started following you`,
       {
         type: 'new_follower',
-        follower: followerUsername
+        follower: followerUsername,
       }
     );
   } catch (error) {
@@ -892,7 +935,9 @@ export const sendLikeClientNotification = async (
 ): Promise<void> => {
   try {
     // Don't notify if liker is the claim owner
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user && user.id === claimOwnerId) {
       console.log('Liker is claim owner, skipping notification');
       return;
@@ -906,10 +951,10 @@ export const sendLikeClientNotification = async (
         type: 'new_like',
         claim_id: claimId,
         claim_title: claimTitle,
-        liker: likerUsername
+        liker: likerUsername,
       }
     );
   } catch (error) {
     console.error('Error sending like notification:', error);
   }
-}; 
+};
