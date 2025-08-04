@@ -79,6 +79,18 @@ export default function ClaimDetail() {
   const supabaseUrl = 'https://qdpammoeepwgapqyfrrh.supabase.co';
 
   useEffect(() => {
+    const logJWT = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        console.log('JWT Token:', session.access_token);
+      }
+    };
+    logJWT();
+  }, []);
+
+  useEffect(() => {
     if (claimId) {
       fetchClaimAndComments();
     }
@@ -670,14 +682,14 @@ export default function ClaimDetail() {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    Authroization: `Bearer ${session.access_token}`,
+                    Authorization: `Bearer ${session.access_token}`,
                   },
                   body: JSON.stringify({
                     userId: parentComment.user_id,
                     title: 'New Reply',
                     body: 'Someone replied to your comment! 🫨',
                     data: {
-                      claimId: claim.id || '',
+                      claimId: claim?.id || '',
                       type: 'new_reply',
                       commentId: comment.id,
                       parentCommentId,
