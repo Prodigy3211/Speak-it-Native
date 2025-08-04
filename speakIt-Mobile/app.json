@@ -2,7 +2,7 @@
   "expo": {
     "name": "speakIt-Mobile",
     "slug": "speakIt-Mobile",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "speakitmobile",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.speakitmobile.app",
-      "buildNumber": "7",
+      "buildNumber": "8",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["remote-notification"],
