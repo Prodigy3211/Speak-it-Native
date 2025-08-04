@@ -129,10 +129,7 @@ export default function Trending() {
               e.stopPropagation();
               hapticFeedback.share();
               try {
-                const deepLink = generateSmartLink('claim', {
-                  claimId: item.id,
-                  category: item.category,
-                });
+                const deepLink = `speakitmobile://claim/${item.id}`;
                 const appStoreLink =
                   Platform.OS === 'ios'
                     ? 'https://apps.apple.com/us/app/speak-it/id6748719689' // Replace with actual App Store link

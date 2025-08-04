@@ -1,7 +1,6 @@
 import FlagContent from '@/components/FlagContent';
 import { hapticFeedback } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
-import { generateSmartLink } from '@/lib/deepLinks';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
@@ -242,10 +241,7 @@ export default function CategoryClaims() {
 
   const handleShare = async (claim: Claim) => {
     try {
-      const deepLink = generateSmartLink('claim', {
-        claimId: claim.id,
-        category: claim.category,
-      });
+      const deepLink = `speakitmobile://claim/${claim.id}`;
       const appStoreLink =
         Platform.OS === 'ios'
           ? 'https://apps.apple.com/us/app/speak-it/id6748719689'

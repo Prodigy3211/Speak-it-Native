@@ -1,7 +1,6 @@
 import BlockUser from '@/components/BlockUser';
 import FlagContent from '@/components/FlagContent';
 import { validateUserContent } from '@/lib/contentModeration';
-import { generateSmartLink } from '@/lib/deepLinks';
 import { hapticFeedback } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -77,18 +76,6 @@ export default function ClaimDetail() {
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const supabaseUrl = 'https://qdpammoeepwgapqyfrrh.supabase.co';
-
-  useEffect(() => {
-    const logJWT = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        console.log('JWT Token:', session.access_token);
-      }
-    };
-    logJWT();
-  }, []);
 
   useEffect(() => {
     if (claimId) {
@@ -1588,10 +1575,7 @@ export default function ClaimDetail() {
           onPress={async () => {
             hapticFeedback.share();
             try {
-              const deepLink = generateSmartLink('claim', {
-                claimId: claim.id,
-                category: claim.category,
-              });
+              const deepLink = `speakitmobile://claim/${claim.id}`;
               const appStoreLink =
                 Platform.OS === 'ios'
                   ? 'https://apps.apple.com/us/app/speak-it/id6748719689'
