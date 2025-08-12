@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { generateSmartLink } from '@/lib/deepLinks';
 import {
   ActivityIndicator,
   FlatList,
