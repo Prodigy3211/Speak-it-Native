@@ -42,7 +42,8 @@ export class NotificationService {
   async initialize(): Promise<void> {
     try {
       // Request permissions
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      const { status: existingStatus } =
+        await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
 
       if (existingStatus !== 'granted') {
@@ -61,7 +62,6 @@ export class NotificationService {
           projectId: '5bd0baf7-8364-4882-a616-f528ca96e62e', // Your EAS project ID
         });
         this.expoPushToken = token.data;
-        console.log('Expo push token:', this.expoPushToken);
 
         // Save token to database
         await this.saveTokenToDatabase(this.expoPushToken);
@@ -81,7 +81,9 @@ export class NotificationService {
    */
   private async saveTokenToDatabase(token: string): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         console.log('No authenticated user found');
         return;
@@ -95,11 +97,14 @@ export class NotificationService {
         .eq('token', token)
         .single();
 
-      if (selectError && selectError.code !== 'PGRST116') { // PGRST116 is "not found"
+      if (selectError && selectError.code !== 'PGRST116') {
+        // PGRST116 is "not found"
         console.error('Error checking existing push token:', selectError);
         // If it's a permission error, log it but don't fail
         if (selectError.code === '42501') {
-          console.warn('Permission denied for push_tokens table - push notifications may not work');
+          console.warn(
+            'Permission denied for push_tokens table - push notifications may not work'
+          );
           return;
         }
         return;
@@ -107,19 +112,19 @@ export class NotificationService {
 
       if (!existingToken) {
         // Insert new token
-        const { error } = await supabase
-          .from('push_tokens')
-          .insert({
-            user_id: user.id,
-            token: token,
-            device_type: Platform.OS as 'ios' | 'android',
-          });
+        const { error } = await supabase.from('push_tokens').insert({
+          user_id: user.id,
+          token: token,
+          device_type: Platform.OS as 'ios' | 'android',
+        });
 
         if (error) {
           console.error('Error saving push token:', error);
           // If it's a permission error, log it but don't fail
           if (error.code === '42501') {
-            console.warn('Permission denied for push_tokens table - push notifications may not work');
+            console.warn(
+              'Permission denied for push_tokens table - push notifications may not work'
+            );
             return;
           }
         } else {
@@ -136,18 +141,21 @@ export class NotificationService {
    */
   private setupNotificationListeners(): void {
     // Handle notification received while app is running
-    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received:', notification);
-      // You can handle the notification here (e.g., update UI, play sound, etc.)
-    });
+    const notificationListener = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        console.log('Notification received:', notification);
+        // You can handle the notification here (e.g., update UI, play sound, etc.)
+      }
+    );
 
     // Handle notification response (when user taps notification)
-    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Notification response:', response);
-      
-      // Handle navigation based on notification data
-      this.handleNotificationResponse(response);
-    });
+    const responseListener =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        console.log('Notification response:', response);
+
+        // Handle navigation based on notification data
+        this.handleNotificationResponse(response);
+      });
 
     // Store listeners for cleanup (you can add cleanup method if needed)
     this.notificationListener = notificationListener;
@@ -157,28 +165,30 @@ export class NotificationService {
   /**
    * Handle notification response and navigate accordingly
    */
-  private handleNotificationResponse(response: Notifications.NotificationResponse): void {
+  private handleNotificationResponse(
+    response: Notifications.NotificationResponse
+  ): void {
     const data = response.notification.request.content.data as any;
-    
+
     // Import router dynamically to avoid circular dependencies
     import('expo-router').then(({ router }) => {
       if (data?.type === 'new_comment' && data?.claim_id) {
         // Navigate to claim detail
         router.push({
           pathname: '/Speak-It/ClaimDetail' as any,
-          params: { claimId: data.claim_id }
+          params: { claimId: data.claim_id },
         });
       } else if (data?.type === 'new_claim' && data?.category) {
         // Navigate to category claims
         router.push({
           pathname: '/Speak-It/CategoryClaims' as any,
-          params: { category: data.category }
+          params: { category: data.category },
         });
       } else if (data?.type === 'mention' && data?.comment_id) {
         // Navigate to specific comment
         router.push({
           pathname: '/Speak-It/ClaimDetail' as any,
-          params: { claimId: data.claim_id, commentId: data.comment_id }
+          params: { claimId: data.claim_id, commentId: data.comment_id },
         });
       }
     });
@@ -194,7 +204,11 @@ export class NotificationService {
   /**
    * Send local notification (for testing)
    */
-  async sendLocalNotification(title: string, body: string, data?: any): Promise<void> {
+  async sendLocalNotification(
+    title: string,
+    body: string,
+    data?: any
+  ): Promise<void> {
     await Notifications.scheduleNotificationAsync({
       content: {
         title,
@@ -209,8 +223,8 @@ export class NotificationService {
    * Schedule local notification
    */
   async scheduleNotification(
-    title: string, 
-    body: string, 
+    title: string,
+    body: string,
     trigger: Notifications.NotificationTriggerInput,
     data?: any
   ): Promise<string> {
@@ -241,7 +255,9 @@ export class NotificationService {
   /**
    * Get all scheduled notifications
    */
-  async getScheduledNotifications(): Promise<Notifications.NotificationRequest[]> {
+  async getScheduledNotifications(): Promise<
+    Notifications.NotificationRequest[]
+  > {
     return await Notifications.getAllScheduledNotificationsAsync();
   }
 
@@ -250,7 +266,9 @@ export class NotificationService {
    */
   async removeTokenFromDatabase(): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user || !this.expoPushToken) return;
 
       const { error } = await supabase
@@ -263,7 +281,9 @@ export class NotificationService {
         console.error('Error removing push token:', error);
         // If it's a permission error, log it but don't fail
         if (error.code === '42501') {
-          console.warn('Permission denied for push_tokens table - token removal failed');
+          console.warn(
+            'Permission denied for push_tokens table - token removal failed'
+          );
           return;
         }
       } else {
@@ -277,4 +297,4 @@ export class NotificationService {
 }
 
 // Export singleton instance
-export const notificationService = NotificationService.getInstance(); 
+export const notificationService = NotificationService.getInstance();
