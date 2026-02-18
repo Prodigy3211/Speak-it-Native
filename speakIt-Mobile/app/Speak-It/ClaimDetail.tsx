@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { styles } from '../../styles/ClaimDetail.styles';
+import { sendMentionNotification, sendNewCommentNotification } from '@/lib/notificationHelpers';
 import {
   ActivityIndicator,
   Alert,
@@ -618,12 +619,22 @@ export default function ClaimDetail() {
 
       // Refresh comments immediately
       await fetchComments();
+      //Notify when someone comments
+    if(imageSource === 'comment' && claim) {
+      sendNewCommentNotification(
+        claim.id,
+        comment.id,
+        user?.email ?? '',
+        claim.title ?? 'Your Claim'
+      )
+    } 
     } catch (error: any) {
       console.error('Error submitting comment:', error);
       Alert.alert('Error', 'Failed to submit comment');
     } finally {
       setSubmitting(false);
     }
+
   };
 
   const renderComment = ({ item }: { item: Comment }) => (
