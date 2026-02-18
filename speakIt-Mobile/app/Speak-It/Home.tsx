@@ -7,6 +7,7 @@
 
 import { View, StatusBar } from 'react-native';
 import Trending from '@/components/dashboard/Trending';
+import MyClaims from '@/components/dashboard/MyClaims';
 
 export default function Home() {
   return (
@@ -17,6 +18,7 @@ export default function Home() {
         translucent={false}
       />
       <Trending />
+      <MyClaims />
     </View>
   );
 }
