@@ -22,6 +22,7 @@ export default function Index() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -40,6 +41,11 @@ export default function Index() {
   const handleAuth = async () => {
     if (!email.trim() || !password.trim()) {
       Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+
+    if (isSignUp && password != confirmPassword) {
+      Alert.alert("Error", "Passwords do not match");
       return;
     }
 
@@ -206,6 +212,31 @@ export default function Index() {
                 />
               </TouchableOpacity>
             </View>
+            
+            {/* Confirm Password */}
+            {isSignUp && (
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm Password"
+                  placeholderTextColor="#666"  
+                  onPress={() => hapticFeedback.select()}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                /> 
+                <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={20}
+                  color="#666"
+                />
+              </TouchableOpacity>
+              </View>
+            )}
 
             {!isSignUp && (
               <TouchableOpacity

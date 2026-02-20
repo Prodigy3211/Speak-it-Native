@@ -17,6 +17,7 @@ import DeleteAccountModal from "@/components/DeleteAccountModal";
 import { notificationService } from "@/lib/notificationService";
 import NotificationSettings from "@/components/NotificationSettings";
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface UserStats {
     claims_made: number;
@@ -252,6 +253,7 @@ export default function Profile (){
     }
 
     return(
+        <SafeAreaView style={styles.container}>
         <View style={styles.container}>
             <ScrollView 
                 style={styles.scrollView}
@@ -386,6 +388,7 @@ export default function Profile (){
                 onClose={() => setNotificationSettingsVisible(false)}
             />
         </View>
+        </SafeAreaView>
     );
 };
 

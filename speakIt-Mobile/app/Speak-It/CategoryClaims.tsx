@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Claim {
   id: string;
@@ -366,7 +367,7 @@ export default function CategoryClaims() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -414,7 +415,7 @@ export default function CategoryClaims() {
           }
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
