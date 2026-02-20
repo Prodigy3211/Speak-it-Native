@@ -230,6 +230,7 @@ export default function AdminFlagDashboard({ visible, onClose }: AdminFlagDashbo
     }
 
     return (
+        <SafeAreaView style={styles.container}>
         <Modal visible={visible} animationType="slide">
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
@@ -340,6 +341,7 @@ export default function AdminFlagDashboard({ visible, onClose }: AdminFlagDashbo
                 </Modal>
             </SafeAreaView>
         </Modal>
+        </SafeAreaView>
     );
 }
 

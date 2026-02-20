@@ -13,6 +13,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { CATEGORIES } from '@/lib/constants';
@@ -169,6 +170,7 @@ export default function CreateClaim() {
   };
 
   return (
+    <SafeAreaView style={styles.container}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -298,6 +300,7 @@ export default function CreateClaim() {
         </ScrollView>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

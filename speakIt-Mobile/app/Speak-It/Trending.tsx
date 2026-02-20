@@ -1,54 +1,116 @@
-import { View, Text, FlatList, TouchableOpacity, Platform, Share, StyleSheet, ActivityIndicator } from "react-native"
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { hapticFeedback } from "@/lib/haptics"
-import { Ionicons } from "@expo/vector-icons"
-import {router} from "expo-router"
-
+import { hapticFeedback } from '@/lib/haptics';
+import { supabase } from '@/lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Platform,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Claim {
-    id: string;
-    title: string;
-    claim: string;
-    category: string;
+  id: string;
+  title: string;
+  claim: string;
+  category: string;
+  up_votes: number;
+  down_votes: number;
+  created_at: string;
+  comment_count: number;
+  forComments: number;
+  againstComments: number;
+  forPercentage: number;
+  againstPercentage: number;
 }
-export default function MyClaims() {
-    //This function will fetch claims made by the user
-    const [myClaims, setMyClaims] = useState<Claim[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
-    const fetchMyClaims = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        setLoading(true);
-        setError(null);
+export default function Trending() {
+  const [trendingClaims, setTrendingClaims] = useState<Claim[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-        const { data, error } = await supabase
-            .from('claims')
-            .select('*')
-            .eq('op_id', user.id);
+  useEffect(() => {
+    fetchTrendingClaims();
+  }, []);
 
-        if (error) {
-            console.error('Error fetching my claims:', error);
-        } else {
-            setMyClaims(data);
-        }
-        setLoading(false);
+  const fetchTrendingClaims = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get all claims first
+      const { data: claims, error: claimsError } = await supabase
+        .from('claims')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (claimsError) {
+        throw claimsError;
+      }
+
+      //Get All Comments
+      const { data: allComments, error: commentsError } = await supabase
+        .from('comments')
+        .select('*')
+        .in('claim_id', claims?.map((c) => c.id) || []);
+
+      if (commentsError) {
+        throw commentsError;
+      }
+
+      //Use memory to process comments
+      const claimsWithCounts =
+        claims?.map((claim) => {
+          const claimComments =
+            allComments?.filter((c) => c.claim_id === claim.id) || [];
+          const totalComments = claimComments.length;
+          const forComments = claimComments.filter((c) => c.affirmative).length;
+          const againstComments = totalComments - forComments;
+
+          return {
+            ...claim,
+            comment_count: totalComments,
+            forComments,
+            againstComments,
+            forPercentage:
+              totalComments > 0
+                ? Math.round((forComments / totalComments) * 100)
+                : 0,
+            againstPercentage:
+              totalComments > 0
+                ? Math.round((againstComments / totalComments) * 100)
+                : 0,
+          };
+        }) || [];
+
+      // Sort by comment count and take top 5
+      const sortedClaims = claimsWithCounts
+        .sort((a, b) => b.comment_count - a.comment_count)
+        .slice(0, 5);
+
+      setTrendingClaims(sortedClaims);
+    } catch (err: any) {
+      console.error('Error fetching trending claims:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    useEffect(() => {
-        fetchMyClaims();
-    }, []);
-
- const handleClaimPress = (claim: Claim) => {
+  const handleClaimPress = (claim: Claim) => {
     router.push({
       pathname: '/Speak-It/ClaimDetail' as any,
       params: { claimId: claim.id },
     });
   };
 
-    const renderClaimItem = ({ item }: { item: any }) => (
+  const renderClaimItem = ({ item }: { item: Claim }) => (
     <TouchableOpacity
       style={styles.claimCard}
       onPress={() => {
@@ -99,7 +161,7 @@ export default function MyClaims() {
         {item.claim || 'No claim content'}
       </Text>
 
-      {/* <View style={styles.claimFooter}>
+      <View style={styles.claimFooter}>
         <View style={styles.statsContainer}>
           <Text style={styles.statText}>💬 {item.comment_count}</Text>
           {item.comment_count > 0 && (
@@ -120,14 +182,14 @@ export default function MyClaims() {
             day: 'numeric',
           })}
         </Text>
-      </View> */}
+      </View>
     </TouchableOpacity>
   );
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size='large' color='#007AFF' />
-        <Text style={styles.loadingText}>Loading Your Claims...</Text>
+        <Text style={styles.loadingText}>Loading Trending Claims...</Text>
       </View>
     );
   }
@@ -136,12 +198,12 @@ export default function MyClaims() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>
-          Error loading your claims: {error}
+          Error loading trending claims: {error}
         </Text>
         <TouchableOpacity
           style={styles.retryButton}
           onPress={() => {
-            MyClaims();
+            fetchTrendingClaims();
             hapticFeedback.modal();
           }}
         >
@@ -150,24 +212,27 @@ export default function MyClaims() {
       </View>
     );
   }
-    
-    
-    return (
-        <View>
-            <Text style={styles.sectionTitle}>📝Your Claims</Text>
-            <Text style={styles.sectionSubtitle}>Yes, you said that... </Text>
 
-            <FlatList
-                data={myClaims}
-                // renderItem={({ item }) => <Text>{item.title}</Text>}
-                renderItem={renderClaimItem}
-                keyExtractor={(item) => item.id}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.listContainer}
-            />
-        </View>
-    )
+  return (
+    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <Text style={styles.sectionTitle}> 🔥The Hottest Takes</Text>
+      <Text style={styles.sectionSubtitle}>
+        Click a Hot Take below, see all categories or create your own thread to
+        join the discussion!
+      </Text>
+      <FlatList
+        data={trendingClaims}
+        renderItem={renderClaimItem}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContainer}
+      />
+    </View>
+    </SafeAreaView>
+  );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,

@@ -102,6 +102,20 @@ export default function Layout(){
                     headerShown: false,
                 }}
             />
+            <Tabs.Screen
+                name="MyClaims"
+                options={{
+                    href: null, // This hides it from the tab bar
+                    headerShown: false,
+                }}
+            />
+            <Tabs.Screen
+                name="Trending"
+                options={{
+                    href: null, // This hides it from the tab bar
+                    headerShown: false,
+                }}
+            />
         </Tabs>
     );
 }

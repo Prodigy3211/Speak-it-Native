@@ -7,6 +7,7 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { CATEGORIES } from '@/lib/constants';
 import { CATEGORY_IMAGES } from '@/lib/categoryImages';
@@ -73,6 +74,7 @@ export default function Categories() {
   );
 
   return (
+    <SafeAreaView style={styles.container}>
     <View style={styles.container}>
       <Text style={styles.title}>Categories</Text>
       <Text style={styles.subtitle}>Explore discussions by topic</Text>
@@ -96,6 +98,7 @@ export default function Categories() {
         })}
       />
     </View>
+    </SafeAreaView>
   );
 }
 
