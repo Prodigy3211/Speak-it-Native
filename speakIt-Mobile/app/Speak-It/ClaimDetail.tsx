@@ -1495,6 +1495,7 @@ export default function ClaimDetail() {
   }
 
   return (
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1855,5 +1856,6 @@ export default function ClaimDetail() {
         </Modal>
       )}
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

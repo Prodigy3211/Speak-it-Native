@@ -222,6 +222,8 @@ export default function Index() {
                   placeholder="Confirm Password"
                   placeholderTextColor="#666"  
                   onPress={() => hapticFeedback.select()}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 /> 
