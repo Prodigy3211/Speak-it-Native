@@ -277,6 +277,7 @@ export default function Index() {
                 setIsSignUp(!isSignUp);
                 setEmail("");
                 setPassword("");
+                setConfirmPassword("");
                 hapticFeedback.select();
               }}
             >
