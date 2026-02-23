@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   button: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#007AFF',
     marginHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 8,
