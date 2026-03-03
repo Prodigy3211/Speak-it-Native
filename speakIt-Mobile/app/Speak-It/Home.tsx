@@ -9,6 +9,7 @@ import { HOME_IMAGES } from '@/lib/homeImages';
 import { router } from 'expo-router';
 import { Image, StatusBar,Text, View, TouchableOpacity, ScrollView, StyleSheet, GestureResponderEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Trending from './Trending';
 
 interface HomeButtonProps {
   title: string;
@@ -29,37 +30,16 @@ const HomeButton = ({ title, onPress}: HomeButtonProps) => {
 
 export default function Home() {
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <StatusBar
-        barStyle='dark-content'
-        backgroundColor='#f8f9fa'
-        translucent={false}
-      />
+    
+    <>< Trending />
 
-      <View>
-      <Text style={styles.sectionTitle}> Welcome To Speak It</Text>
-      <Text style={styles.sectionSubtitle}>
-        Check the hottest claims below, see all categories or create your own claim.
-           </Text>
-      </View>
-      <ScrollView
-      contentContainerStyle={{ 
-        paddingHorizontal: 20,
-        paddingTop: 16,
-      paddingBottom: 16,
-      gap: 20,
-     }}
-      >
-      <HomeButton
-        title = "Trending Claims"
-        onPress={() => router.push('/Speak-It/Trending')}
-        />      
+      <View> 
         <HomeButton
         title = "My Claims"
         onPress={() => router.push('/Speak-It/MyClaims')}
         />
-        </ScrollView>
-    </SafeAreaView>
+        </View>
+        </>
   );
 }
 
@@ -91,6 +71,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 3, // Android shadow
+    marginBottom: 16,
   },
   buttonText: {
     color: '#ffffff',

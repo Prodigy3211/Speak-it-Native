@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
   claimCard: {
     backgroundColor: 'white',

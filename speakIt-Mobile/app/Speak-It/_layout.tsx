@@ -51,10 +51,10 @@ export default function Layout(){
             <Tabs.Screen
                 name="Home"
                 options={{
-                    title: 'Home',
+                    title: 'Trending',
                     headerShown: false,
                     tabBarIcon: ({ color, size }) => (
-                        <Ionicons name="home" size={size} color={color} />
+                        <Ionicons name="flame-outline" size={size} color={color} />
                     ),
                 }}
             />
