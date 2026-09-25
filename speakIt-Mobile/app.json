@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "speakitmobile",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.speakitmobile.app",
@@ -35,7 +35,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      
       "package": "com.speakitmobile.app",
       "versionCode": 4,
       "intentFilters": [
