@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "SpeakIt",
-    "slug": "SpeakIt",
-    "version": "1.0.7",
+    "slug": "speakIt-Mobile",
+    "version": "1.0.13",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "speakitmobile",
@@ -14,15 +14,21 @@
       "buildNumber": "8",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "CFBundleURLTypes": [
           {
             "CFBundleURLName": "speakitmobile",
-            "CFBundleURLSchemes": ["speakitmobile"]
+            "CFBundleURLSchemes": [
+              "speakitmobile"
+            ]
           }
         ]
       },
-      "associatedDomains": ["applinks:speak-it-three.vercel.app"]
+      "associatedDomains": [
+        "applinks:speak-it-three.vercel.app"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -43,7 +49,10 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -64,7 +73,10 @@
         }
       ],
       "expo-web-browser",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-font",
+      "expo-image",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
